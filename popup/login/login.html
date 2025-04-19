@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCA-Agent - Connexion</title>
+  <link rel="stylesheet" href="../popup.css">
+  <link rel="stylesheet" href="login.css">
+</head>
+<body>
+  <div class="container login-container">
+    <header>
+      <h1>FCA-Agent</h1>
+      <div id="status-indicator" class="status-disconnected" title="Statut de connexion">●</div>
+    </header>
+
+    <div class="auth-container">
+      <div class="auth-tabs">
+        <button id="login-tab" class="auth-tab active">Connexion</button>
+        <button id="register-tab" class="auth-tab">Inscription</button>
+      </div>
+      
+      <!-- Formulaire de connexion -->
+      <form id="login-form" class="auth-form">
+        <div class="form-group">
+          <label for="login-username">Nom d'utilisateur</label>
+          <input type="text" id="login-username" required>
+        </div>
+        <div class="form-group">
+          <label for="login-password">Mot de passe</label>
+          <input type="password" id="login-password" required>
+        </div>
+        <div class="form-action">
+          <button type="submit" class="btn btn-primary">Se connecter</button>
+        </div>
+        <div id="login-error" class="error-message"></div>
+      </form>
+      
+      <!-- Formulaire d'inscription -->
+      <form id="register-form" class="auth-form" style="display: none;">
+        <div class="form-group">
+          <label for="register-username">Nom d'utilisateur</label>
+          <input type="text" id="register-username" required>
+        </div>
+        <div class="form-group">
+          <label for="register-email">Email</label>
+          <input type="email" id="register-email">
+        </div>
+        <div class="form-group">
+          <label for="register-password">Mot de passe</label>
+          <input type="password" id="register-password" required>
+        </div>
+        <div class="form-group">
+          <label for="register-confirm-password">Confirmer le mot de passe</label>
+          <input type="password" id="register-confirm-password" required>
+        </div>
+        <div class="form-action">
+          <button type="submit" class="btn btn-primary">S'inscrire</button>
+        </div>
+        <div id="register-error" class="error-message"></div>
+      </form>
+    </div>
+    
+    <div class="server-config">
+      <button id="server-config-btn" class="btn btn-small">Configurer le serveur</button>
+      <div id="server-config-panel" style="display: none;">
+        <div class="form-group">
+          <label for="server-url">URL du serveur</label>
+          <input type="text" id="server-url" placeholder="http://fca-agent.letsq.xyz/api">
+        </div>
+        <button id="save-server-config" class="btn btn-small">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+  
+  <script src="login.js"></script>
+</body>
+</html>

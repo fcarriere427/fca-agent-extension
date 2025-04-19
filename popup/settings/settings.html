@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCA-Agent - Paramètres</title>
+  <link rel="stylesheet" href="../popup.css">
+  <link rel="stylesheet" href="settings.css">
+</head>
+<body>
+  <div class="container settings-container">
+    <header>
+      <h1>Paramètres</h1>
+      <button id="back-btn" title="Retour">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+    </header>
+
+    <div class="settings-content">
+      <!-- Section profil utilisateur -->
+      <section class="settings-section" id="profile-section">
+        <h2>Profil utilisateur</h2>
+        <div class="profile-info">
+          <div class="profile-field">
+            <span class="profile-label">Nom d'utilisateur :</span>
+            <span id="profile-username" class="profile-value">-</span>
+          </div>
+          <div class="profile-field">
+            <span class="profile-label">Email :</span>
+            <span id="profile-email" class="profile-value">-</span>
+          </div>
+          <div class="profile-field">
+            <span class="profile-label">Compte créé le :</span>
+            <span id="profile-created" class="profile-value">-</span>
+          </div>
+          <div class="profile-field">
+            <span class="profile-label">Dernière connexion :</span>
+            <span id="profile-last-login" class="profile-value">-</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Sécurité -->
+      <section class="settings-section" id="security-section">
+        <h2>Sécurité</h2>
+        <form id="change-password-form">
+          <div class="form-group">
+            <label for="current-password">Mot de passe actuel</label>
+            <input type="password" id="current-password" required>
+          </div>
+          <div class="form-group">
+            <label for="new-password">Nouveau mot de passe</label>
+            <input type="password" id="new-password" required>
+          </div>
+          <div class="form-group">
+            <label for="confirm-password">Confirmer le mot de passe</label>
+            <input type="password" id="confirm-password" required>
+          </div>
+          <button type="submit" class="btn btn-primary">Modifier le mot de passe</button>
+          <div id="password-error" class="error-message"></div>
+          <div id="password-success" class="success-message"></div>
+        </form>
+      </section>
+
+      <!-- Configuration du serveur -->
+      <section class="settings-section" id="server-section">
+        <h2>Configuration du serveur</h2>
+        <div class="form-group">
+          <label for="server-url">URL du serveur</label>
+          <input type="text" id="server-url">
+        </div>
+        <button id="save-server-btn" class="btn btn-primary">Enregistrer</button>
+        <div id="server-status" class="status-message"></div>
+      </section>
+
+      <!-- Actions du compte -->
+      <section class="settings-section" id="account-actions">
+        <h2>Actions du compte</h2>
+        <button id="logout-btn" class="btn btn-danger">Se déconnecter</button>
+      </section>
+    </div>
+  </div>
+  
+  <script src="settings.js"></script>
+</body>
+</html>

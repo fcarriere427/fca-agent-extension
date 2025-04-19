@@ -1,6 +1,9 @@
 // FCA-Agent - Script du popup
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Vérifier si l'utilisateur est authentifié
+  checkAuthentication();
+  
   // Éléments DOM
   const userInput = document.getElementById('user-input');
   const submitBtn = document.getElementById('submit-btn');
@@ -22,6 +25,37 @@ document.addEventListener('DOMContentLoaded', () => {
       processUserInput();
     }
   });
+  
+  // Ajouter un bouton de déconnexion dans le header
+  const header = document.querySelector('header');
+  const logoutBtn = document.createElement('button');
+  logoutBtn.id = 'logout-btn';
+  logoutBtn.title = 'Déconnexion';
+  logoutBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>';
+  logoutBtn.addEventListener('click', handleLogout);
+  header.appendChild(logoutBtn);
+  
+  // Ajouter les styles pour le bouton de déconnexion
+  const style = document.createElement('style');
+  style.textContent = `
+    #logout-btn {
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 5px;
+      margin-left: 10px;
+      color: #777;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+    }
+    #logout-btn:hover {
+      background-color: #f0f0f0;
+      color: #d9534f;
+    }
+  `;
+  document.head.appendChild(style);
   
   // Gestionnaires pour les boutons d'actions rapides
   quickTaskButtons.forEach(button => {
@@ -87,8 +121,8 @@ document.addEventListener('DOMContentLoaded', () => {
         taskTitle = 'Brouillon d\'email';
         break;
       case 'settings':
-        // Ouvrir les paramètres (à implémenter)
-        displayMessage('assistant', 'La page des paramètres n\'est pas encore implémentée.');
+        // Ouvrir la page des paramètres
+        window.location.href = 'settings/settings.html';
         return;
       default:
         return;
@@ -166,5 +200,36 @@ document.addEventListener('DOMContentLoaded', () => {
     if (message) {
       responseArea.removeChild(message);
     }
+  }
+  
+  // Vérifie si l'utilisateur est authentifié
+  function checkAuthentication() {
+    chrome.runtime.sendMessage({ action: 'validateToken' }, (response) => {
+      if (!response || !response.success) {
+        // Rediriger vers la page de connexion
+        window.location.href = 'login/login.html';
+      } else {
+        // Mettre à jour l'interface avec les infos utilisateur
+        chrome.runtime.sendMessage({ action: 'getUserData' }, (userData) => {
+          if (userData && userData.userData) {
+            // Mettre à jour le message de bienvenue avec le nom de l'utilisateur
+            const welcomeMessage = responseArea.querySelector('.welcome-message');
+            if (welcomeMessage) {
+              welcomeMessage.textContent = `Bonjour ${userData.userData.username} ! Comment puis-je vous aider aujourd'hui ?`;
+            }
+          }
+        });
+      }
+    });
+  }
+  
+  // Gère la déconnexion
+  function handleLogout() {
+    chrome.runtime.sendMessage({ action: 'logout' }, (response) => {
+      if (response && response.success) {
+        // Rediriger vers la page de connexion
+        window.location.href = 'login/login.html';
+      }
+    });
   }
 });
