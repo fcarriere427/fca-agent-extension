@@ -8,7 +8,7 @@ let userData = null;
 
 // Gestionnaire de messages depuis le popup ou les content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Message reçu dans le background script:', message);
+  console.log('Message reçu dans le background script:', message, 'De:', sender.tab ? 'content script' : 'popup');
   
   if (message.action === 'getStatus') {
     // Vérification du statut de connexion
@@ -148,10 +148,12 @@ async function executeTask(taskType, taskData) {
 // Valide le token d'authentification
 async function validateAuthToken() {
   if (!authToken) {
+    console.log('validateAuthToken: pas de token!');
     return false;
   }
   
   try {
+    console.log('validateAuthToken: vérification du token avec l\'API...');
     const response = await fetch(`${API_BASE_URL}/auth/profile`, {
       method: 'GET',
       headers: {
@@ -160,8 +162,11 @@ async function validateAuthToken() {
       }
     });
     
+    console.log('validateAuthToken: réponse API status:', response.status);
+    
     if (!response.ok) {
       // Token invalide
+      console.log('validateAuthToken: token invalide!');
       authToken = null;
       userData = null;
       chrome.storage.local.remove(['authToken', 'userData']);
@@ -171,6 +176,7 @@ async function validateAuthToken() {
     // Mettre à jour les données utilisateur
     const data = await response.json();
     userData = data.user;
+    console.log('validateAuthToken: token valide, données utilisateur mises à jour');
     return true;
   } catch (error) {
     console.error('Erreur lors de la validation du token:', error);

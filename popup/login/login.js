@@ -148,26 +148,44 @@ document.addEventListener('DOMContentLoaded', () => {
   // Connexion utilisateur
   async function login(username, password) {
     try {
+      console.log('Tentative de connexion avec', username);
+      console.log('URL API:', apiBaseUrl);
+      
       const response = await fetch(`${apiBaseUrl}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password })
       });
       
+      console.log('Réponse du serveur:', response.status);
+      
       const data = await response.json();
+      console.log('Données reçues:', data);
       
       if (!response.ok) {
         throw new Error(data.error || 'Erreur de connexion');
       }
       
-      // Sauvegarde du token
-      chrome.storage.local.set({ 'authToken': data.token, 'userData': data.user });
+      if (!data.token) {
+        console.error('Erreur: Pas de token dans la réponse');
+        throw new Error('Pas de token reçu du serveur');
+      }
       
-      // Informer le background script
-      chrome.runtime.sendMessage({ 
-        action: 'setAuthToken', 
-        token: data.token,
-        userData: data.user
+      // Sauvegarde du token
+      chrome.storage.local.set({ 'authToken': data.token, 'userData': data.user }, () => {
+        console.log('Token et données utilisateur sauvegardés');
+        
+        // Informer le background script
+        chrome.runtime.sendMessage({ 
+          action: 'setAuthToken', 
+          token: data.token,
+          userData: data.user
+        }, (response) => {
+          console.log('setAuthToken response:', response);
+          
+          // Redirection après sauvegarde confirmée
+          window.location.href = '../popup.html';
+        });
       });
       
       return { success: true };

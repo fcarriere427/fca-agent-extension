@@ -204,22 +204,41 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Vérifie si l'utilisateur est authentifié
   function checkAuthentication() {
-    chrome.runtime.sendMessage({ action: 'validateToken' }, (response) => {
-      if (!response || !response.success) {
-        // Rediriger vers la page de connexion
+    console.log('Vérification de l\'authentification...');
+    
+    chrome.storage.local.get(['authToken'], (result) => {
+      console.log('Token dans le stockage:', result.authToken ? 'Présent' : 'Absent');
+      
+      if (!result.authToken) {
+        // Aucun token, rediriger vers la page de connexion
+        console.log('Pas de token, redirection vers login');
         window.location.href = 'login/login.html';
-      } else {
-        // Mettre à jour l'interface avec les infos utilisateur
-        chrome.runtime.sendMessage({ action: 'getUserData' }, (userData) => {
-          if (userData && userData.userData) {
-            // Mettre à jour le message de bienvenue avec le nom de l'utilisateur
-            const welcomeMessage = responseArea.querySelector('.welcome-message');
-            if (welcomeMessage) {
-              welcomeMessage.textContent = `Bonjour ${userData.userData.username} ! Comment puis-je vous aider aujourd'hui ?`;
-            }
-          }
-        });
+        return;
       }
+      
+      // Vérifier si le token est valide
+      chrome.runtime.sendMessage({ action: 'validateToken' }, (response) => {
+        console.log('Réponse validateToken:', response);
+        
+        if (!response || !response.success) {
+          // Token invalide, rediriger vers la page de connexion
+          console.log('Token invalide, redirection vers login');
+          window.location.href = 'login/login.html';
+        } else {
+          // Mettre à jour l'interface avec les infos utilisateur
+          chrome.runtime.sendMessage({ action: 'getUserData' }, (userData) => {
+            console.log('Données utilisateur:', userData);
+            
+            if (userData && userData.userData) {
+              // Mettre à jour le message de bienvenue avec le nom de l'utilisateur
+              const welcomeMessage = responseArea.querySelector('.welcome-message');
+              if (welcomeMessage) {
+                welcomeMessage.textContent = `Bonjour ${userData.userData.username} ! Comment puis-je vous aider aujourd'hui ?`;
+              }
+            }
+          });
+        }
+      });
     });
   }
   
