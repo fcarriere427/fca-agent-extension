@@ -117,6 +117,65 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   
+  // Bouton d'affichage du token (debug)
+  const showTokenBtn = document.getElementById('show-token-btn');
+  const tokenDisplay = document.getElementById('token-display');
+  const verifyTokenBtn = document.getElementById('verify-token-btn');
+  const verifyResult = document.getElementById('verify-result');
+  
+  if (showTokenBtn && tokenDisplay) {
+    showTokenBtn.addEventListener('click', () => {
+      chrome.storage.local.get(['authToken'], (result) => {
+        if (result.authToken) {
+          tokenDisplay.textContent = result.authToken;
+          tokenDisplay.style.display = 'block';
+        } else {
+          tokenDisplay.textContent = 'Aucun token stocké';
+          tokenDisplay.style.display = 'block';
+        }
+      });
+    });
+  }
+  
+  if (verifyTokenBtn && verifyResult) {
+    verifyTokenBtn.addEventListener('click', async () => {
+      chrome.storage.local.get(['authToken', 'apiBaseUrl'], async (result) => {
+        if (!result.authToken) {
+          verifyResult.textContent = 'Aucun token à vérifier';
+          verifyResult.style.display = 'block';
+          verifyResult.style.color = '#dc3545';
+          return;
+        }
+        
+        try {
+          const apiUrl = result.apiBaseUrl || apiBaseUrl;
+          verifyResult.textContent = 'Vérification en cours...';
+          verifyResult.style.display = 'block';
+          verifyResult.style.color = '#333';
+          
+          const response = await fetch(`${apiUrl}/auth/verify-token`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ token: result.authToken })
+          });
+          
+          const data = await response.json();
+          
+          if (data.valid) {
+            verifyResult.textContent = `Token valide! Utilisateur: ${data.decoded.username} (ID: ${data.decoded.id})`;
+            verifyResult.style.color = '#28a745';
+          } else {
+            verifyResult.textContent = `Token invalide: ${data.error} - ${data.message}`;
+            verifyResult.style.color = '#dc3545';
+          }
+        } catch (error) {
+          verifyResult.textContent = `Erreur lors de la vérification: ${error.message}`;
+          verifyResult.style.color = '#dc3545';
+        }
+      });
+    });
+  }
+  
   // Fonctions
   
   // Initialisation de l'application

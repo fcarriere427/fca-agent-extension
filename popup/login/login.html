@@ -71,6 +71,15 @@
         <button id="save-server-config" class="btn btn-small">Enregistrer</button>
       </div>
     </div>
+    
+    <!-- Bouton de debug temporaire -->
+    <div style="margin-top: 10px; text-align: center;">
+      <button id="show-token-btn" class="btn btn-small">Afficher le token JWT</button>
+      <div id="token-display" style="margin-top: 5px; word-break: break-all; font-size: 10px; max-height: 100px; overflow-y: auto; display: none;"></div>
+      
+      <button id="verify-token-btn" class="btn btn-small" style="margin-top: 10px;">Vérifier le token</button>
+      <div id="verify-result" style="margin-top: 5px; font-size: 12px; display: none;"></div>
+    </div>
   </div>
   
   <script src="login.js"></script>
