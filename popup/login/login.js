@@ -148,7 +148,12 @@ document.addEventListener('DOMContentLoaded', () => {
     showTokenBtn.addEventListener('click', () => {
       chrome.storage.local.get(['authToken'], (result) => {
         if (result.authToken) {
-          tokenDisplay.textContent = result.authToken;
+          tokenDisplay.innerHTML = `
+            <strong>Token JWT:</strong><br>
+            ${result.authToken}<br><br>
+            <strong>Format pour API:</strong><br>
+            Authorization: Bearer ${result.authToken}
+          `;
           tokenDisplay.style.display = 'block';
         } else {
           tokenDisplay.textContent = 'Aucun token stocké';
@@ -192,6 +197,73 @@ document.addEventListener('DOMContentLoaded', () => {
         } catch (error) {
           verifyResult.textContent = `Erreur lors de la vérification: ${error.message}`;
           verifyResult.style.color = '#dc3545';
+        }
+      });
+    });
+  }
+  
+  // Bouton de test d'accès au profil
+  const testProfileBtn = document.getElementById('test-profile-btn');
+  const profileResult = document.getElementById('profile-result');
+  
+  if (testProfileBtn && profileResult) {
+    testProfileBtn.addEventListener('click', async () => {
+      chrome.storage.local.get(['authToken', 'apiBaseUrl'], async (result) => {
+        if (!result.authToken) {
+          profileResult.textContent = 'Aucun token disponible';
+          profileResult.style.display = 'block';
+          profileResult.style.color = '#dc3545';
+          return;
+        }
+        
+        try {
+          const apiUrl = result.apiBaseUrl || apiBaseUrl;
+          profileResult.textContent = 'Test d\'accès au profil en cours...';
+          profileResult.style.display = 'block';
+          profileResult.style.color = '#333';
+          
+          console.log('Tentative d\'accès au profil avec token:', result.authToken.substring(0, 20) + '...');
+          
+          // Essayer avec le paramètre de requête
+          const response = await fetch(`${apiUrl}/auth/profile?token=${encodeURIComponent(result.authToken)}`, {
+            method: 'GET',
+            headers: { 
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          console.log('Réponse du profil:', response.status);
+          
+          try {
+            const responseText = await response.text();
+            console.log('Réponse brute:', responseText);
+            
+            const data = JSON.parse(responseText || '{}');
+            
+            if (response.ok) {
+              profileResult.innerHTML = `
+                <div style="color: #28a745;">
+                  <strong>Profil accessible!</strong><br>
+                  Utilisateur: ${data.user?.username || 'Inconnu'}<br>
+                  Email: ${data.user?.email || 'Non défini'}<br>
+                  Créé le: ${data.user?.created_at || 'Inconnu'}
+                </div>
+              `;
+            } else {
+              profileResult.innerHTML = `
+                <div style="color: #dc3545;">
+                  <strong>Erreur ${response.status}</strong><br>
+                  Message: ${data.error || 'Erreur inconnue'}
+                </div>
+              `;
+            }
+          } catch (error) {
+            profileResult.textContent = `Erreur de traitement de la réponse: ${error.message}`;
+            profileResult.style.color = '#dc3545';
+          }
+        } catch (error) {
+          profileResult.textContent = `Erreur de requête: ${error.message}`;
+          profileResult.style.color = '#dc3545';
         }
       });
     });

@@ -117,7 +117,8 @@ async function executeTask(taskType, taskData) {
       };
     }
     
-    const response = await fetch(endpoint, {
+    // Essayer d'abord avec l'en-tête Authorization
+    let response = await fetch(endpoint, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -125,6 +126,22 @@ async function executeTask(taskType, taskData) {
       },
       body: JSON.stringify(taskType === 'changePassword' ? taskData : { type: taskType, data: taskData })
     });
+    
+    // Si ça échoue à cause de l'authentification, essayer avec le paramètre token
+    if (response.status === 401 || response.status === 403) {
+      if (authToken) {
+        const tokenParam = `token=${encodeURIComponent(authToken)}`;
+        const urlWithToken = endpoint.includes('?') ? `${endpoint}&${tokenParam}` : `${endpoint}?${tokenParam}`;
+        
+        response = await fetch(urlWithToken, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(taskType === 'changePassword' ? taskData : { type: taskType, data: taskData })
+        });
+      }
+    }
     
     if (response.status === 401 || response.status === 403) {
       // Token expiré ou invalide
@@ -154,7 +171,10 @@ async function validateAuthToken() {
   
   try {
     console.log('validateAuthToken: vérification du token avec l\'API...');
-    const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+    console.log('Token utilisé pour validation: ' + authToken.substring(0, 20) + '...');
+    
+    // Essayez d'abord avec l'en-tête Authorization
+    let response = await fetch(`${API_BASE_URL}/auth/profile`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
@@ -162,7 +182,20 @@ async function validateAuthToken() {
       }
     });
     
-    console.log('validateAuthToken: réponse API status:', response.status);
+    console.log('validateAuthToken (en-tête): réponse API status:', response.status);
+    
+    // Si ça échoue, essayez avec le paramètre de requête
+    if (response.status === 401) {
+      console.log('validateAuthToken: essai avec paramètre de requête...');
+      response = await fetch(`${API_BASE_URL}/auth/profile?token=${encodeURIComponent(authToken)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('validateAuthToken (param): réponse API status:', response.status);
+    }
     
     if (!response.ok) {
       // Token invalide
@@ -191,13 +224,25 @@ async function fetchProfileData() {
   }
   
   try {
-    const response = await fetch(`${API_BASE_URL}/auth/profile`, {
+    // Essayer avec l'en-tête Authorization
+    let response = await fetch(`${API_BASE_URL}/auth/profile`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${authToken}`
       }
     });
+    
+    // Si ça échoue, essayer avec le paramètre de requête
+    if (response.status === 401 || response.status === 403) {
+      console.log('fetchProfileData: essai avec paramètre de requête...');
+      response = await fetch(`${API_BASE_URL}/auth/profile?token=${encodeURIComponent(authToken)}`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+    }
     
     if (response.status === 401 || response.status === 403) {
       // Token expiré ou invalide
