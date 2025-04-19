@@ -47,10 +47,31 @@ document.addEventListener('DOMContentLoaded', () => {
     loginError.textContent = '';
     
     try {
+      // Affichage d'un message de chargement
+      const loadingMsg = document.createElement('div');
+      loadingMsg.textContent = 'Connexion en cours...';
+      loadingMsg.style.marginTop = '10px';
+      loginForm.appendChild(loadingMsg);
+      
       const result = await login(username, password);
+      
+      // Suppression du message de chargement
+      loginForm.removeChild(loadingMsg);
+      
       if (result.success) {
-        // Redirection vers la page principale
-        window.location.href = '../popup.html';
+        // Montrer un message de succès à la place de rediriger immédiatement
+        loginForm.innerHTML = `
+          <div style="text-align: center; color: #28a745;">
+            <p>Connexion réussie!</p>
+            <p>Vous pouvez maintenant vérifier le token et tester sa validité.</p>
+            <button id="continue-btn" class="btn btn-primary" style="margin-top: 15px;">Continuer</button>
+          </div>
+        `;
+        
+        // Ajouter l'événement pour continuer
+        document.getElementById('continue-btn').addEventListener('click', () => {
+          window.location.href = '../popup.html';
+        });
       } else {
         displayError(loginError, result.error || 'Erreur de connexion');
       }
@@ -230,24 +251,31 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error('Pas de token reçu du serveur');
       }
       
-      // Sauvegarde du token
-      chrome.storage.local.set({ 'authToken': data.token, 'userData': data.user }, () => {
-        console.log('Token et données utilisateur sauvegardés');
-        
-        // Informer le background script
-        chrome.runtime.sendMessage({ 
-          action: 'setAuthToken', 
-          token: data.token,
-          userData: data.user
-        }, (response) => {
-          console.log('setAuthToken response:', response);
+      // Sauvegarde du token - version simplifiée sans redirection pour tests
+      return new Promise((resolve) => {
+        chrome.storage.local.set({ 
+          'authToken': data.token, 
+          'userData': data.user 
+        }, () => {
+          console.log('Token et données utilisateur sauvegardés localement');
           
-          // Redirection après sauvegarde confirmée
-          window.location.href = '../popup.html';
+          // Afficher immédiatement le token pour débogage
+          if (tokenDisplay) {
+            tokenDisplay.textContent = data.token;
+            tokenDisplay.style.display = 'block';
+          }
+          
+          // Informer le background script
+          chrome.runtime.sendMessage({ 
+            action: 'setAuthToken', 
+            token: data.token,
+            userData: data.user
+          }, (response) => {
+            console.log('setAuthToken response:', response);
+            resolve({ success: true });
+          });
         });
       });
-      
-      return { success: true };
     } catch (error) {
       return { success: false, error: error.message };
     }
