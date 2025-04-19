@@ -2,7 +2,7 @@
 // Gère les communications avec le serveur Raspberry Pi
 
 // Configuration
-const API_BASE_URL = 'http://localhost:3000/api'; // À remplacer par l'adresse IP du Raspberry Pi
+const API_BASE_URL = 'http://localhost:3001/api'; // À remplacer par l'adresse IP du Raspberry Pi
 let authToken = null;
 
 // Gestionnaire de messages depuis le popup ou les content scripts

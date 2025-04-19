@@ -20,7 +20,7 @@ Cette extension Chrome/Edge permet d'interagir avec les applications web profess
 
 ## Connexion au serveur
 
-Par défaut, l'extension tente de se connecter au serveur sur `http://localhost:3000`. Pour modifier cette configuration, éditez la variable `API_BASE_URL` dans le fichier `background.js`.
+Par défaut, l'extension tente de se connecter au serveur sur `http://localhost:3001`. Pour modifier cette configuration, éditez la variable `API_BASE_URL` dans le fichier `background.js`.
 
 ## Fonctionnalités
 

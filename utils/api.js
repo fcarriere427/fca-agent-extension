@@ -2,7 +2,7 @@
 // Fonctions utilitaires pour communiquer avec le serveur Raspberry Pi
 
 class ApiClient {
-  constructor(baseUrl = 'http://localhost:3000/api') {
+  constructor(baseUrl = 'http://localhost:3001/api') {
     this.baseUrl = baseUrl;
     this.authToken = null;
   }
