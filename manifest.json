@@ -12,7 +12,8 @@
     "storage"
   ],
   "host_permissions": [
-    "http://localhost:3001/*"
+    "http://localhost:3001/*",
+    "http://fca-agent.letsq.xyz/*"
   ],
   "background": {
     "service_worker": "background.js"
