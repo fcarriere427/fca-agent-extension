@@ -81,7 +81,8 @@ async function checkServerConnection() {
   try {
     const response = await fetch(`${API_BASE_URL}/status`, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      mode: 'cors' // Explicitement utiliser le mode CORS standard
     });
     
     if (!response.ok) {
@@ -117,45 +118,50 @@ async function executeTask(taskType, taskData) {
       };
     }
     
-    // Essayer d'abord avec l'en-tête Authorization
-    let response = await fetch(endpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': authToken ? `Bearer ${authToken}` : ''
-      },
-      body: JSON.stringify(taskType === 'changePassword' ? taskData : { type: taskType, data: taskData })
-    });
-    
-    // Si ça échoue à cause de l'authentification, essayer avec le paramètre token
-    if (response.status === 401 || response.status === 403) {
-      if (authToken) {
-        const tokenParam = `token=${encodeURIComponent(authToken)}`;
-        const urlWithToken = endpoint.includes('?') ? `${endpoint}&${tokenParam}` : `${endpoint}?${tokenParam}`;
-        
-        response = await fetch(urlWithToken, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(taskType === 'changePassword' ? taskData : { type: taskType, data: taskData })
-        });
+    // Essayer avec le paramètre token directement plutôt qu'avec l'en-tête
+    if (authToken) {
+      const tokenParam = `token=${encodeURIComponent(authToken)}`;
+      const urlWithToken = endpoint.includes('?') ? `${endpoint}&${tokenParam}` : `${endpoint}?${tokenParam}`;
+      
+      const response = await fetch(urlWithToken, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(taskType === 'changePassword' ? taskData : { type: taskType, data: taskData }),
+        mode: 'cors' // Mode standard CORS
+      });
+      
+      if (response.status === 401 || response.status === 403) {
+        // Token expiré ou invalide
+        authToken = null;
+        userData = null;
+        chrome.storage.local.remove(['authToken', 'userData']);
+        throw new Error('Session expirée, veuillez vous reconnecter');
       }
+      
+      if (!response.ok) {
+        throw new Error(`Erreur API: ${response.status}`);
+      }
+      
+      return await response.json();
+    } else {
+      // Pas de token, requête standard
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(taskType === 'changePassword' ? taskData : { type: taskType, data: taskData }),
+        mode: 'cors'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Erreur API: ${response.status}`);
+      }
+      
+      return await response.json();
     }
-    
-    if (response.status === 401 || response.status === 403) {
-      // Token expiré ou invalide
-      authToken = null;
-      userData = null;
-      chrome.storage.local.remove(['authToken', 'userData']);
-      throw new Error('Session expirée, veuillez vous reconnecter');
-    }
-    
-    if (!response.ok) {
-      throw new Error(`Erreur API: ${response.status}`);
-    }
-    
-    return await response.json();
   } catch (error) {
     console.error('Erreur lors de l\'exécution de la tâche:', error);
     throw error;
@@ -173,29 +179,16 @@ async function validateAuthToken() {
     console.log('validateAuthToken: vérification du token avec l\'API...');
     console.log('Token utilisé pour validation: ' + authToken.substring(0, 20) + '...');
     
-    // Essayez d'abord avec l'en-tête Authorization
-    let response = await fetch(`${API_BASE_URL}/auth/profile`, {
+    // Utiliser directement le token comme paramètre de requête (plus fiable avec CORS)
+    const response = await fetch(`${API_BASE_URL}/auth/profile?token=${encodeURIComponent(authToken)}`, {
       method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`
-      }
+        'Content-Type': 'application/json'
+      },
+      mode: 'cors'
     });
     
-    console.log('validateAuthToken (en-tête): réponse API status:', response.status);
-    
-    // Si ça échoue, essayez avec le paramètre de requête
-    if (response.status === 401) {
-      console.log('validateAuthToken: essai avec paramètre de requête...');
-      response = await fetch(`${API_BASE_URL}/auth/profile?token=${encodeURIComponent(authToken)}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      console.log('validateAuthToken (param): réponse API status:', response.status);
-    }
+    console.log('validateAuthToken: réponse API status:', response.status);
     
     if (!response.ok) {
       // Token invalide
@@ -224,25 +217,14 @@ async function fetchProfileData() {
   }
   
   try {
-    // Essayer avec l'en-tête Authorization
-    let response = await fetch(`${API_BASE_URL}/auth/profile`, {
+    // Utiliser directement le token comme paramètre de requête
+    const response = await fetch(`${API_BASE_URL}/auth/profile?token=${encodeURIComponent(authToken)}`, {
       method: 'GET',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${authToken}`
-      }
+        'Content-Type': 'application/json'
+      },
+      mode: 'cors'
     });
-    
-    // Si ça échoue, essayer avec le paramètre de requête
-    if (response.status === 401 || response.status === 403) {
-      console.log('fetchProfileData: essai avec paramètre de requête...');
-      response = await fetch(`${API_BASE_URL}/auth/profile?token=${encodeURIComponent(authToken)}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      });
-    }
     
     if (response.status === 401 || response.status === 403) {
       // Token expiré ou invalide

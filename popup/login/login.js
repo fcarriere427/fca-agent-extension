@@ -224,12 +224,13 @@ document.addEventListener('DOMContentLoaded', () => {
           
           console.log('Tentative d\'accès au profil avec token:', result.authToken.substring(0, 20) + '...');
           
-          // Essayer avec le paramètre de requête
+          // Utiliser le token comme paramètre de requête
           const response = await fetch(`${apiUrl}/auth/profile?token=${encodeURIComponent(result.authToken)}`, {
             method: 'GET',
             headers: { 
               'Content-Type': 'application/json'
-            }
+            },
+            mode: 'cors'
           });
           
           console.log('Réponse du profil:', response.status);
@@ -306,7 +307,8 @@ document.addEventListener('DOMContentLoaded', () => {
       const response = await fetch(`${apiBaseUrl}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password })
+        body: JSON.stringify({ username, password }),
+        mode: 'cors'
       });
       
       console.log('Réponse du serveur:', response.status);
