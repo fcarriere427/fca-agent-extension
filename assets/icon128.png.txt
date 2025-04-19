@@ -1,0 +1,2 @@
+Ce fichier est un placeholder pour l'icône 128x128 de l'extension.
+Veuillez le remplacer par une véritable image PNG de 128x128 pixels.

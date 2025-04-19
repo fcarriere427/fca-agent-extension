@@ -1,0 +1,2 @@
+Ce fichier est un placeholder pour l'icône 16x16 de l'extension.
+Veuillez le remplacer par une véritable image PNG de 16x16 pixels.

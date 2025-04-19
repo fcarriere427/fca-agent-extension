@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FCA-Agent</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>FCA-Agent</h1>
+      <div id="status-indicator" class="status-disconnected" title="Statut de connexion">●</div>
+    </header>
+
+    <div class="input-container">
+      <input type="text" id="user-input" placeholder="Comment puis-je vous aider aujourd'hui ?">
+      <button id="submit-btn" title="Envoyer">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="22" y1="2" x2="11" y2="13"></line>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+        </svg>
+      </button>
+    </div>
+    
+    <div class="tasks-container">
+      <h2>Actions rapides</h2>
+      <div class="quick-tasks">
+        <button class="task-btn" data-task="email-summary">
+          <span class="task-icon">📧</span>
+          <span class="task-label">Résumer mes emails</span>
+        </button>
+        <button class="task-btn" data-task="teams-summary">
+          <span class="task-icon">👥</span>
+          <span class="task-label">Résumer mes conversations Teams</span>
+        </button>
+        <button class="task-btn" data-task="draft-email">
+          <span class="task-icon">✉️</span>
+          <span class="task-label">Rédiger un email</span>
+        </button>
+        <button class="task-btn" data-task="settings">
+          <span class="task-icon">⚙️</span>
+          <span class="task-label">Paramètres</span>
+        </button>
+      </div>
+    </div>
+    
+    <div class="response-container" id="response-area">
+      <p class="welcome-message">Bonjour ! Je suis votre assistant personnel. Comment puis-je vous aider aujourd'hui ?</p>
+    </div>
+  </div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>

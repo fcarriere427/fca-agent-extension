@@ -1,0 +1,150 @@
+/* FCA-Agent - Styles du popup */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  width: 350px;
+  min-height: 400px;
+  background-color: #f5f6f7;
+  color: #333;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding: 12px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ddd;
+}
+
+h1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #2c5282;
+}
+
+h2 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #4a5568;
+}
+
+#status-indicator {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-connected {
+  color: #38a169;
+}
+
+.status-disconnected {
+  color: #e53e3e;
+}
+
+.input-container {
+  display: flex;
+  margin-bottom: 15px;
+}
+
+#user-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 20px 0 0 20px;
+  font-size: 14px;
+  outline: none;
+}
+
+#submit-btn {
+  background-color: #4299e1;
+  color: white;
+  border: none;
+  border-radius: 0 20px 20px 0;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+#submit-btn:hover {
+  background-color: #3182ce;
+}
+
+.tasks-container {
+  margin-bottom: 15px;
+}
+
+.quick-tasks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.task-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 10px;
+  background-color: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.task-btn:hover {
+  background-color: #ebf8ff;
+  border-color: #bee3f8;
+}
+
+.task-icon {
+  font-size: 20px;
+  margin-bottom: 5px;
+}
+
+.task-label {
+  font-size: 12px;
+  text-align: center;
+}
+
+.response-container {
+  flex: 1;
+  padding: 12px;
+  background-color: white;
+  border-radius: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.welcome-message {
+  color: #718096;
+  font-style: italic;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
