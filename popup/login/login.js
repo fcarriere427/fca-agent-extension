@@ -287,7 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
       console.log('Réponse du serveur:', response.status);
       
       const data = await response.json();
-      console.log('Données reçues:', data);
+      console.log('Données reçues du serveur:', JSON.stringify(data));
       
       if (!response.ok) {
         throw new Error(data.error || 'Erreur de connexion');
@@ -298,6 +298,10 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error('Réponse du serveur invalide ou incomplète');
       }
       
+      console.log('Tokens reçus du serveur:');
+      console.log('- Access token:', data.accessToken.substring(0, 20) + '...');
+      console.log('- Refresh token:', data.refreshToken.substring(0, 20) + '...');
+      
       // Sauvegarde des tokens et données utilisateur
       return new Promise((resolve) => {
         // Utiliser uniquement chrome.storage.session pour les tokens
@@ -307,7 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
           'userData': data.user,
           'tokenTimestamp': Date.now()
         }, () => {
-          console.log('Tokens et données utilisateur sauvegardés');
+          console.log('Tokens et données utilisateur sauvegardés en session storage');
           
           // Sauvegarder uniquement l'URL API en local storage
           chrome.storage.local.set({
@@ -327,6 +331,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
       });
     } catch (error) {
+      console.error('Erreur de login:', error);
       return { success: false, error: error.message };
     }
   }
