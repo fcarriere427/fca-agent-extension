@@ -459,10 +459,15 @@ chrome.runtime.onInstalled.addListener(() => {
   console.log('FCA-Agent installé/mis à jour');
   
   // Récupération des données stockées
-  chrome.storage.local.get(['authToken', 'userData', 'apiBaseUrl'], (result) => {
-    if (result.authToken) {
-      authToken = result.authToken;
-      console.log('Token d\'authentification chargé');
+  chrome.storage.session.get(['accessToken', 'refreshToken', 'userData', 'apiBaseUrl'], (result) => {
+    if (result.accessToken) {
+      accessToken = result.accessToken;
+      console.log('Token d\'accès chargé');
+    }
+    
+    if (result.refreshToken) {
+      refreshToken = result.refreshToken;
+      console.log('Token de rafraîchissement chargé');
     }
     
     if (result.userData) {
@@ -475,14 +480,17 @@ chrome.runtime.onInstalled.addListener(() => {
       console.log('URL API chargée:', API_BASE_URL);
     }
     
-    // Valider le token si présent
-    if (authToken) {
-      validateAuthToken()
+    // Valider les tokens si présents
+    if (accessToken || refreshToken) {
+      validateAndRefreshTokens()
         .then(isValid => {
-          console.log('Token valide:', isValid);
+          console.log('Tokens validés:', isValid);
+          if (isValid && accessToken) {
+            scheduleTokenRefresh();
+          }
         })
         .catch(error => {
-          console.error('Erreur lors de la validation du token:', error);
+          console.error('Erreur lors de la validation des tokens:', error);
         });
     }
   });
@@ -500,9 +508,13 @@ chrome.runtime.onInstalled.addListener(() => {
 // Événement au démarrage de l'extension
 chrome.runtime.onStartup.addListener(() => {
   // Récupération des données stockées
-  chrome.storage.local.get(['authToken', 'userData', 'apiBaseUrl'], (result) => {
-    if (result.authToken) {
-      authToken = result.authToken;
+  chrome.storage.session.get(['accessToken', 'refreshToken', 'userData', 'apiBaseUrl'], (result) => {
+    if (result.accessToken) {
+      accessToken = result.accessToken;
+    }
+    
+    if (result.refreshToken) {
+      refreshToken = result.refreshToken;
     }
     
     if (result.userData) {
@@ -513,9 +525,17 @@ chrome.runtime.onStartup.addListener(() => {
       API_BASE_URL = result.apiBaseUrl;
     }
     
-    // Valider le token si présent
-    if (authToken) {
-      validateAuthToken();
+    // Valider les tokens si présents
+    if (accessToken || refreshToken) {
+      validateAndRefreshTokens()
+        .then(isValid => {
+          if (isValid && accessToken) {
+            scheduleTokenRefresh();
+          }
+        })
+        .catch(error => {
+          console.error('Erreur lors de la validation des tokens:', error);
+        });
     }
   });
 });

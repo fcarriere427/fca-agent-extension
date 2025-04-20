@@ -138,7 +138,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   
-  // Bouton d'affichage du token (debug)
+  // Bouton d'affichage des tokens (debug)
   const showTokenBtn = document.getElementById('show-token-btn');
   const tokenDisplay = document.getElementById('token-display');
   const verifyTokenBtn = document.getElementById('verify-token-btn');
@@ -146,13 +146,15 @@ document.addEventListener('DOMContentLoaded', () => {
   
   if (showTokenBtn && tokenDisplay) {
     showTokenBtn.addEventListener('click', () => {
-      chrome.storage.local.get(['authToken'], (result) => {
-        if (result.authToken) {
+      chrome.storage.session.get(['accessToken', 'refreshToken'], (result) => {
+        if (result.accessToken && result.refreshToken) {
           tokenDisplay.innerHTML = `
-            <strong>Token JWT:</strong><br>
-            ${result.authToken}<br><br>
+            <strong>Access Token:</strong><br>
+            ${result.accessToken.substring(0, 40)}...<br><br>
+            <strong>Refresh Token:</strong><br>
+            ${result.refreshToken.substring(0, 40)}...<br><br>
             <strong>Format pour API:</strong><br>
-            Authorization: Bearer ${result.authToken}
+            Authorization: Bearer ${result.accessToken}
           `;
           tokenDisplay.style.display = 'block';
         } else {
@@ -165,8 +167,8 @@ document.addEventListener('DOMContentLoaded', () => {
   
   if (verifyTokenBtn && verifyResult) {
     verifyTokenBtn.addEventListener('click', async () => {
-      chrome.storage.local.get(['authToken', 'apiBaseUrl'], async (result) => {
-        if (!result.authToken) {
+      chrome.storage.session.get(['accessToken', 'refreshToken'], async (result) => {
+        if (!result.accessToken) {
           verifyResult.textContent = 'Aucun token à vérifier';
           verifyResult.style.display = 'block';
           verifyResult.style.color = '#dc3545';
@@ -174,26 +176,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         try {
-          const apiUrl = result.apiBaseUrl || apiBaseUrl;
           verifyResult.textContent = 'Vérification en cours...';
           verifyResult.style.display = 'block';
           verifyResult.style.color = '#333';
           
-          const response = await fetch(`${apiUrl}/auth/verify-token`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: result.authToken })
+          // Utiliser la méthode validateToken du background script
+          chrome.runtime.sendMessage({ action: 'validateToken' }, (response) => {
+            if (response && response.success) {
+              verifyResult.textContent = 'Token valide!';
+              verifyResult.style.color = '#28a745';
+            } else {
+              verifyResult.textContent = 'Token invalide ou expiré';
+              verifyResult.style.color = '#dc3545';
+            }
           });
-          
-          const data = await response.json();
-          
-          if (data.valid) {
-            verifyResult.textContent = `Token valide! Utilisateur: ${data.decoded.username} (ID: ${data.decoded.id})`;
-            verifyResult.style.color = '#28a745';
-          } else {
-            verifyResult.textContent = `Token invalide: ${data.error} - ${data.message}`;
-            verifyResult.style.color = '#dc3545';
-          }
         } catch (error) {
           verifyResult.textContent = `Erreur lors de la vérification: ${error.message}`;
           verifyResult.style.color = '#dc3545';
@@ -208,8 +204,8 @@ document.addEventListener('DOMContentLoaded', () => {
   
   if (testProfileBtn && profileResult) {
     testProfileBtn.addEventListener('click', async () => {
-      chrome.storage.local.get(['authToken', 'apiBaseUrl'], async (result) => {
-        if (!result.authToken) {
+      chrome.storage.session.get(['accessToken'], async (result) => {
+        if (!result.accessToken) {
           profileResult.textContent = 'Aucun token disponible';
           profileResult.style.display = 'block';
           profileResult.style.color = '#dc3545';
@@ -217,31 +213,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         
         try {
-          const apiUrl = result.apiBaseUrl || apiBaseUrl;
           profileResult.textContent = 'Test d\'accès au profil en cours...';
           profileResult.style.display = 'block';
           profileResult.style.color = '#333';
           
-          console.log('Tentative d\'accès au profil avec token:', result.authToken.substring(0, 20) + '...');
-          
-          // Utiliser le token comme paramètre de requête
-          const response = await fetch(`${apiUrl}/auth/profile?token=${encodeURIComponent(result.authToken)}`, {
-            method: 'GET',
-            headers: { 
-              'Content-Type': 'application/json'
-            },
-            mode: 'cors'
-          });
-          
-          console.log('Réponse du profil:', response.status);
-          
-          try {
-            const responseText = await response.text();
-            console.log('Réponse brute:', responseText);
-            
-            const data = JSON.parse(responseText || '{}');
-            
-            if (response.ok) {
+          // Utiliser fetchProfileData du background script
+          chrome.runtime.sendMessage({ action: 'fetchProfile' }, (response) => {
+            if (response && response.success && response.data) {
+              const data = response.data;
               profileResult.innerHTML = `
                 <div style="color: #28a745;">
                   <strong>Profil accessible!</strong><br>
@@ -253,15 +232,12 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
               profileResult.innerHTML = `
                 <div style="color: #dc3545;">
-                  <strong>Erreur ${response.status}</strong><br>
-                  Message: ${data.error || 'Erreur inconnue'}
+                  <strong>Erreur</strong><br>
+                  Message: ${response?.error || 'Erreur inconnue'}
                 </div>
               `;
             }
-          } catch (error) {
-            profileResult.textContent = `Erreur de traitement de la réponse: ${error.message}`;
-            profileResult.style.color = '#dc3545';
-          }
+          });
         } catch (error) {
           profileResult.textContent = `Erreur de requête: ${error.message}`;
           profileResult.style.color = '#dc3545';
@@ -275,7 +251,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialisation de l'application
   function initializeApp() {
     // Récupérer la configuration du serveur
-    chrome.storage.local.get(['apiBaseUrl', 'authToken'], (result) => {
+    chrome.storage.local.get(['apiBaseUrl'], (result) => {
       if (result.apiBaseUrl) {
         apiBaseUrl = result.apiBaseUrl;
         serverUrlInput.value = apiBaseUrl;
@@ -286,15 +262,12 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.storage.local.set({ 'apiBaseUrl': apiBaseUrl });
       }
       
-      // Vérifier si l'utilisateur est déjà connecté
-      if (result.authToken) {
-        // Redirection vers la page principale si déjà authentifié
-        chrome.runtime.sendMessage({ action: 'validateToken' }, (response) => {
-          if (response && response.success) {
-            window.location.href = '../popup.html';
-          }
-        });
-      }
+      // Vérifier si l'utilisateur est déjà connecté via les tokens en session storage
+      chrome.runtime.sendMessage({ action: 'validateToken' }, (response) => {
+        if (response && response.success) {
+          window.location.href = '../popup.html';
+        }
+      });
     });
   }
   
@@ -320,32 +293,35 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error(data.error || 'Erreur de connexion');
       }
       
-      if (!data.token) {
-        console.error('Erreur: Pas de token dans la réponse');
-        throw new Error('Pas de token reçu du serveur');
+      if (!data.accessToken || !data.refreshToken) {
+        console.error('Erreur: Token d\'accès ou token de rafraîchissement manquant dans la réponse');
+        throw new Error('Réponse du serveur invalide ou incomplète');
       }
       
-      // Sauvegarde du token - version simplifiée sans redirection pour tests
+      // Sauvegarde des tokens et données utilisateur
       return new Promise((resolve) => {
-        chrome.storage.local.set({ 
-          'authToken': data.token, 
-          'userData': data.user 
+        // Utiliser uniquement chrome.storage.session pour les tokens
+        chrome.storage.session.set({ 
+          'accessToken': data.accessToken, 
+          'refreshToken': data.refreshToken,
+          'userData': data.user,
+          'tokenTimestamp': Date.now()
         }, () => {
-          console.log('Token et données utilisateur sauvegardés localement');
+          console.log('Tokens et données utilisateur sauvegardés');
           
-          // Afficher immédiatement le token pour débogage
-          if (tokenDisplay) {
-            tokenDisplay.textContent = data.token;
-            tokenDisplay.style.display = 'block';
-          }
+          // Sauvegarder uniquement l'URL API en local storage
+          chrome.storage.local.set({
+            'apiBaseUrl': apiBaseUrl
+          });
           
           // Informer le background script
           chrome.runtime.sendMessage({ 
-            action: 'setAuthToken', 
-            token: data.token,
+            action: 'setAuthTokens', 
+            accessToken: data.accessToken,
+            refreshToken: data.refreshToken,
             userData: data.user
           }, (response) => {
-            console.log('setAuthToken response:', response);
+            console.log('setAuthTokens response:', response);
             resolve({ success: true });
           });
         });

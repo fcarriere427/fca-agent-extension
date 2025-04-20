@@ -4,12 +4,19 @@
 class ApiClient {
   constructor(baseUrl = 'http://localhost:3001/api') {
     this.baseUrl = baseUrl;
-    this.authToken = null;
+    this.accessToken = null;
+    this.refreshToken = null;
   }
   
-  // Définir le token d'authentification
-  setAuthToken(token) {
-    this.authToken = token;
+  // Définir les tokens d'authentification
+  setTokens(accessToken, refreshToken) {
+    this.accessToken = accessToken;
+    this.refreshToken = refreshToken;
+  }
+  
+  // Récupérer le refresh token
+  getRefreshToken() {
+    return this.refreshToken;
   }
   
   // Headers par défaut pour les requêtes
@@ -18,8 +25,8 @@ class ApiClient {
       'Content-Type': 'application/json'
     };
     
-    if (this.authToken) {
-      headers['Authorization'] = `Bearer ${this.authToken}`;
+    if (this.accessToken) {
+      headers['Authorization'] = `Bearer ${this.accessToken}`;
     }
     
     return headers;
@@ -80,17 +87,56 @@ class ApiClient {
   async login(username, password) {
     const response = await this.post('auth/login', { username, password });
     
-    if (response && response.token) {
-      this.setAuthToken(response.token);
+    if (response && response.success && response.accessToken && response.refreshToken) {
+      this.setTokens(response.accessToken, response.refreshToken);
       return response;
     }
     
     return response;
   }
   
+  // Rafraîchir le token d'accès
+  async refreshToken() {
+    if (!this.refreshToken) {
+      throw new Error('Pas de refresh token disponible');
+    }
+    
+    try {
+      const response = await this.post('auth/refresh', { refreshToken: this.refreshToken });
+      
+      if (response && response.success && response.accessToken && response.refreshToken) {
+        this.setTokens(response.accessToken, response.refreshToken);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Erreur lors du rafraîchissement du token:', error);
+      // Réinitialiser les tokens en cas d'échec
+      this.accessToken = null;
+      this.refreshToken = null;
+      return false;
+    }
+  }
+  
+  // Déconnexion
+  async logout() {
+    if (this.refreshToken) {
+      try {
+        await this.post('auth/logout', { refreshToken: this.refreshToken });
+      } catch (error) {
+        console.error('Erreur lors de la déconnexion:', error);
+      }
+    }
+    
+    this.accessToken = null;
+    this.refreshToken = null;
+    return true;
+  }
+  
   // Obtenir le statut actuel de la connexion
   isConnected() {
-    return !!this.authToken;
+    return !!this.accessToken;
   }
 }
 
