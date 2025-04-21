@@ -1,5 +1,20 @@
 /* Styles pour la page de connexion/inscription */
 
+/* Style pour le message d'information sur le point d'entrée unique */
+.info-message {
+  background-color: #e8f4f8;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  border-left: 3px solid #4285f4;
+}
+
+.info-message p {
+  margin: 5px 0;
+  font-size: 12px;
+}
+
+
 .login-container {
   width: 350px;
   height: auto;

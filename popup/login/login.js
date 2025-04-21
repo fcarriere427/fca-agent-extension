@@ -1,4 +1,5 @@
 // FCA-Agent - Script de la page de connexion (version simplifiée)
+// Point d'entrée unique pour l'authentification
 
 document.addEventListener('DOMContentLoaded', () => {
   // Éléments DOM

@@ -100,21 +100,21 @@ async function checkServerConnection() {
 async function checkAuthentication() {
   // Éviter les vérifications simultanées
   if (authCheckInProgress) {
-    console.log('Vérification d\'authentification déjà en cours, utilisation de l\''état actuel');
+    console.log("Vérification d'authentification déjà en cours, utilisation de l'état actuel");
     return isAuthenticated;
   }
   
   // Limiter la fréquence des vérifications
   const now = Date.now();
   if (now - lastAuthCheckTime < AUTH_CHECK_THROTTLE) {
-    console.log('Vérification d\'authentification trop fréquente, utilisation de l\''état actuel');
+    console.log("Vérification d'authentification trop fréquente, utilisation de l'état actuel");
     return isAuthenticated;
   }
   
   try {
     authCheckInProgress = true;
     lastAuthCheckTime = now;
-    console.log('Exécution d\'une vérification d\'authentification...');
+    console.log("Exécution d'une vérification d'authentification...");
     
     const response = await fetch(`${API_BASE_URL}/auth/check`, {
       method: 'GET',
@@ -128,10 +128,10 @@ async function checkAuthentication() {
     
     const data = await response.json();
     isAuthenticated = data.authenticated === true;
-    console.log('Vérification d\'authentification terminée, résultat:', isAuthenticated);
+    console.log("Vérification d'authentification terminée, résultat:", isAuthenticated);
     return isAuthenticated;
   } catch (error) {
-    console.error('Erreur lors de la vérification d\'authentification:', error);
+    console.error("Erreur lors de la vérification d'authentification:", error);
     isAuthenticated = false;
     return false;
   } finally {
@@ -197,7 +197,7 @@ async function executeTask(taskType, taskData) {
     
     return await response.json();
   } catch (error) {
-    console.error('Erreur lors de l\'exécution de la tâche:', error);
+    console.error("Erreur lors de l'exécution de la tâche:", error);
     throw error;
   }
 }
@@ -230,10 +230,10 @@ chrome.runtime.onInstalled.addListener(() => {
             setTimeout(() => {
               checkAuthentication()
                 .then(authenticated => {
-                  console.log('Statut d\'authentification:', authenticated ? 'Authentifié' : 'Non authentifié');
+                  console.log("Statut d'authentification:", authenticated ? 'Authentifié' : 'Non authentifié');
                 })
                 .catch(error => {
-                  console.error('Erreur lors de la vérification d\'authentification:', error);
+                  console.error("Erreur lors de la vérification d'authentification:", error);
                 });
             }, 500);
           }
@@ -266,10 +266,10 @@ chrome.runtime.onStartup.addListener(() => {
             setTimeout(() => {
               checkAuthentication()
                 .then(authenticated => {
-                  console.log('Statut d\'authentification:', authenticated ? 'Authentifié' : 'Non authentifié');
+                  console.log("Statut d'authentification:", authenticated ? 'Authentifié' : 'Non authentifié');
                 })
                 .catch(error => {
-                  console.error('Erreur lors de la vérification d\'authentification:', error);
+                  console.error("Erreur lors de la vérification d'authentification:", error);
                 });
             }, 500);
           }
