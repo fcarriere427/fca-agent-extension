@@ -1,12 +1,8 @@
-// FCA-Agent - Script du popup
+// FCA-Agent - Script du popup (version optimisée sans boucles infinies)
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Variables pour limiter les vérifications
-  let authCheckInProgress = false;
-  let statusCheckInProgress = false;
-  
-  // Vérifier si l'utilisateur est authentifié
-  checkAuthentication();
+  // Variables globales
+  let verificationDone = false;
   
   // Éléments DOM
   const userInput = document.getElementById('user-input');
@@ -15,8 +11,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusIndicator = document.getElementById('status-indicator');
   const quickTaskButtons = document.querySelectorAll('.task-btn');
   
-  // Vérification du statut de connexion au serveur
-  checkServerStatus();
+  // Une seule vérification initiale
+  if (!verificationDone) {
+    verificationDone = true;
+    console.log("Exécution d'une vérification unique d'authentification");
+    performSingleAuthCheck();
+  }
   
   // Gestionnaire pour soumettre l'entrée utilisateur
   submitBtn.addEventListener('click', () => {
@@ -157,41 +157,6 @@ document.addEventListener('DOMContentLoaded', () => {
     );
   }
   
-  // Vérifier le statut du serveur
-  function checkServerStatus() {
-    // Éviter les vérifications simultanées
-    if (statusCheckInProgress) {
-      console.log('Vérification du statut serveur déjà en cours');
-      return;
-    }
-    
-    try {
-      statusCheckInProgress = true;
-      
-      // Vérifier le statut une seule fois au chargement du popup
-      chrome.runtime.sendMessage({ action: 'getStatus' }, response => {
-        if (response && response.status === 'connected') {
-          statusIndicator.classList.remove('status-disconnected');
-          statusIndicator.classList.add('status-connected');
-          statusIndicator.title = 'Connecté au serveur';
-        } else {
-          statusIndicator.classList.remove('status-connected');
-          statusIndicator.classList.add('status-disconnected');
-          statusIndicator.title = 'Déconnecté du serveur' + 
-                                  (response?.error ? ': ' + response.error : '');
-        }
-        
-        // Réinitialiser l'indicateur mais avec un délai pour éviter les appels répétés
-        setTimeout(() => {
-          statusCheckInProgress = false;
-        }, 5000);
-      });
-    } catch (error) {
-      console.error('Erreur lors de la vérification du statut:', error);
-      statusCheckInProgress = false;
-    }
-  }
-  
   // Afficher un message dans la zone de réponse
   function displayMessage(sender, text) {
     // Supprimer le message de bienvenue s'il existe
@@ -225,61 +190,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
-  // Vérifie si l'utilisateur est authentifié
-  function checkAuthentication() {
-    // Éviter les vérifications simultanées
-    if (authCheckInProgress) {
-      console.log('Vérification d’authentification déjà en cours');
-      return;
-    }
-    
-    try {
-      authCheckInProgress = true;
-      console.log('Vérification de l\'authentification...');
-      
-      chrome.storage.local.get(['authToken'], (result) => {
-        console.log('Token dans le stockage:', result.authToken ? 'Présent' : 'Absent');
-        
-        if (!result.authToken) {
-          // Aucun token, rediriger vers la page de connexion
-          console.log('Pas de token, redirection vers login');
-          window.location.href = 'login/login.html';
-          return;
-        }
-        
-        // Vérifier si le token est valide - une seule fois
-        chrome.runtime.sendMessage({ action: 'validateToken' }, (response) => {
-          console.log('Réponse validateToken:', response);
-          
-          if (!response || !response.success) {
-            // Token invalide, rediriger vers la page de connexion
-            console.log('Token invalide, redirection vers login');
-            window.location.href = 'login/login.html';
-          } else {
-            // Mettre à jour l'interface avec les infos utilisateur - une seule fois
-            chrome.runtime.sendMessage({ action: 'getUserData' }, (userData) => {
-              console.log('Données utilisateur:', userData);
-              
-              if (userData && userData.userData) {
-                // Mettre à jour le message de bienvenue avec le nom de l'utilisateur
-                const welcomeMessage = responseArea.querySelector('.welcome-message');
-                if (welcomeMessage) {
-                  welcomeMessage.textContent = `Bonjour ${userData.userData.username} ! Comment puis-je vous aider aujourd'hui ?`;
-                }
-              }
-              
-              // Réinitialiser l'indicateur mais avec un délai pour éviter les appels répétés
-              setTimeout(() => {
-                authCheckInProgress = false;
-              }, 5000);
-            });
-          }
-        });
-      });
-    } catch (error) {
-      console.error('Erreur lors de la vérification d’authentification:', error);
-      authCheckInProgress = false;
-    }
+  // Afficher un message d'erreur
+  function displayError(element, message) {
+    element.textContent = message;
+    element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
   
   // Gère la déconnexion
@@ -289,6 +203,72 @@ document.addEventListener('DOMContentLoaded', () => {
         // Rediriger vers la page de connexion
         window.location.href = 'login/login.html';
       }
+    });
+  }
+  
+  // Effectue une seule vérification d'authentification et de statut
+  function performSingleAuthCheck() {
+    console.log("Vérification unique - Début");
+    
+    // Récupérer le token du stockage
+    chrome.storage.local.get(['authToken'], (result) => {
+      if (!result.authToken) {
+        // Aucun token, rediriger vers la page de connexion
+        console.log("Pas de token - Redirection vers login");
+        window.location.href = 'login/login.html';
+        return;
+      }
+      
+      console.log("Token trouvé - Vérification du statut serveur");
+      
+      // Vérifier le statut du serveur une seule fois
+      chrome.runtime.sendMessage({ action: 'getStatus' }, statusResponse => {
+        console.log("Réponse statut serveur:", statusResponse ? statusResponse.status : 'aucune réponse');
+        
+        // Mettre à jour l'indicateur de statut
+        if (statusResponse && statusResponse.status === 'connected') {
+          statusIndicator.classList.remove('status-disconnected');
+          statusIndicator.classList.add('status-connected');
+          statusIndicator.title = 'Connecté au serveur';
+          
+          console.log("Serveur connecté - Vérification token");
+          
+          // Si connecté, vérifier l'authentification une seule fois
+          chrome.runtime.sendMessage({ action: 'validateToken' }, authResponse => {
+            console.log("Réponse validation token:", authResponse ? authResponse.success : 'aucune réponse');
+            
+            if (!authResponse || !authResponse.success) {
+              // Token invalide, rediriger vers la page de connexion
+              console.log("Token invalide - Redirection vers login");
+              window.location.href = 'login/login.html';
+              return;
+            }
+            
+            console.log("Token valide - Récupération données utilisateur");
+            
+            // Si authentifié, récupérer les données utilisateur une seule fois
+            chrome.runtime.sendMessage({ action: 'getUserData' }, userData => {
+              console.log("Réponse données utilisateur:", userData);
+              
+              if (userData && userData.userData) {
+                // Mettre à jour le message de bienvenue
+                const welcomeMessage = responseArea.querySelector('.welcome-message');
+                if (welcomeMessage) {
+                  welcomeMessage.textContent = `Bonjour ${userData.userData.username || ''} ! Comment puis-je vous aider aujourd'hui ?`;
+                }
+              }
+              
+              console.log("Vérification unique terminée avec succès");
+            });
+          });
+        } else {
+          // Serveur déconnecté
+          console.log("Serveur déconnecté");
+          statusIndicator.classList.remove('status-connected');
+          statusIndicator.classList.add('status-disconnected');
+          statusIndicator.title = 'Déconnecté du serveur';
+        }
+      });
     });
   }
 });
