@@ -123,17 +123,13 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.storage.local.set({ 'apiBaseUrl': apiBaseUrl });
       }
       
-      // Ajouter un délai avant la vérification d'authentification
-      setTimeout(() => {
-        // On vérifie l'authentification une seule fois au démarrage
-        checkAuthentication().then(isAuthenticated => {
-          if (isAuthenticated) {
-            window.location.href = '../popup.html';
-          }
-        }).catch(error => {
-          console.error('Erreur lors de la vérification d\'authentification:', error);
-        });
-      }, 1000); // Délai de 1 seconde
+      // Au lieu de faire une vérification automatique, demandons plutôt au background script
+      chrome.runtime.sendMessage({ action: 'getUserData' }, (response) => {
+        // Si déjà authentifié, rediriger
+        if (response && response.isAuthenticated) {
+          window.location.href = '../popup.html';
+        }
+      });
     });
   }
   
@@ -196,27 +192,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
-  // Vérifier le statut du serveur
+  // Vérifier le statut du serveur via le background script
   function checkServerStatus() {
     if (!apiBaseUrl) return;
     
-    fetch(`${apiBaseUrl}/status`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    })
-    .then(response => {
-      if (response.ok) {
+    // Utiliser le background script pour vérifier le statut du serveur
+    chrome.runtime.sendMessage({ action: 'getStatus' }, (response) => {
+      if (response && response.status === 'connected') {
         statusIndicator.classList.remove('status-disconnected');
         statusIndicator.classList.add('status-connected');
         statusIndicator.title = 'Connecté au serveur';
       } else {
-        throw new Error();
+        statusIndicator.classList.remove('status-connected');
+        statusIndicator.classList.add('status-disconnected');
+        statusIndicator.title = 'Déconnecté du serveur';
       }
-    })
-    .catch(() => {
-      statusIndicator.classList.remove('status-connected');
-      statusIndicator.classList.add('status-disconnected');
-      statusIndicator.title = 'Déconnecté du serveur';
     });
   }
   

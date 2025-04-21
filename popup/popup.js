@@ -1,6 +1,10 @@
 // FCA-Agent - Script du popup
 
 document.addEventListener('DOMContentLoaded', () => {
+  // Variables pour limiter les vérifications
+  let authCheckInProgress = false;
+  let statusCheckInProgress = false;
+  
   // Vérifier si l'utilisateur est authentifié
   checkAuthentication();
   

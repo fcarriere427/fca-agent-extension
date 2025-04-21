@@ -8,7 +8,7 @@ let isAuthenticated = false;
 // Variables pour éviter les vérifications simultanées
 let authCheckInProgress = false;
 let lastAuthCheckTime = 0;
-const AUTH_CHECK_THROTTLE = 2000; // 2 secondes minimum entre les vérifications
+const AUTH_CHECK_THROTTLE = 10000; // 10 secondes minimum entre les vérifications
 
 // Gestionnaire de messages depuis le popup ou les content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -75,9 +75,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
+// Variables pour limiter les appels de vérification de statut serveur
+let serverCheckInProgress = false;
+let lastServerCheckTime = 0;
+let cachedServerStatus = 'unknown';
+const SERVER_CHECK_THROTTLE = 10000; // 10 secondes entre les vérifications
+
 // Vérifie la connexion au serveur
 async function checkServerConnection() {
+  // Éviter les vérifications simultanées
+  if (serverCheckInProgress) {
+    console.log("Vérification du serveur déjà en cours, utilisation du statut en cache");
+    return cachedServerStatus;
+  }
+  
+  // Limiter la fréquence des vérifications
+  const now = Date.now();
+  if (now - lastServerCheckTime < SERVER_CHECK_THROTTLE) {
+    console.log("Vérification du serveur trop fréquente, utilisation du statut en cache");
+    return cachedServerStatus;
+  }
+  
   try {
+    serverCheckInProgress = true;
+    lastServerCheckTime = now;
+    console.log("Exécution d'une vérification de statut serveur...");
+    
     const response = await fetch(`${API_BASE_URL}/status`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
@@ -89,10 +112,17 @@ async function checkServerConnection() {
     }
     
     const data = await response.json();
-    return data.status || 'connected';
+    cachedServerStatus = data.status || 'connected';
+    return cachedServerStatus;
   } catch (error) {
     console.error('Erreur de connexion au serveur:', error);
+    cachedServerStatus = 'disconnected';
     return 'disconnected';
+  } finally {
+    // Déverrouiller la vérification avec un délai
+    setTimeout(() => {
+      serverCheckInProgress = false;
+    }, 1000);
   }
 }
 
@@ -218,7 +248,7 @@ chrome.runtime.onInstalled.addListener(() => {
       console.log('URL API par défaut définie:', API_BASE_URL);
     }
     
-    // Une série séquentielle de vérifications avec délai
+    // Faire une seule vérification au démarrage avec un délai plus long
     setTimeout(() => {
       // Vérifier d'abord le statut du serveur
       checkServerConnection()
@@ -226,22 +256,23 @@ chrome.runtime.onInstalled.addListener(() => {
           console.log('Statut du serveur:', status);
           // Vérifier l'authentification seulement si le serveur est connecté
           if (status === 'connected') {
-            // Ajouter un court délai avant de vérifier l'authentification
+            // Ajouter un délai plus long avant de vérifier l'authentification
             setTimeout(() => {
               checkAuthentication()
                 .then(authenticated => {
                   console.log("Statut d'authentification:", authenticated ? 'Authentifié' : 'Non authentifié');
+                  // Ne pas programmer d'autres vérifications automatiques
                 })
                 .catch(error => {
                   console.error("Erreur lors de la vérification d'authentification:", error);
                 });
-            }, 500);
+            }, 2000); // Délai plus long (2 secondes)
           }
         })
         .catch(error => {
           console.error('Erreur lors de la vérification du serveur:', error);
         });
-    }, 1000);
+    }, 2000); // Délai plus long (2 secondes)
   });
 });
 
@@ -254,7 +285,7 @@ chrome.runtime.onStartup.addListener(() => {
       console.log('URL API chargée depuis le stockage local:', API_BASE_URL);
     }
     
-    // Une série séquentielle de vérifications avec délai
+    // Une seule vérification au démarrage, avec délais plus longs
     setTimeout(() => {
       // Vérifier d'abord le statut du serveur
       checkServerConnection()
@@ -262,21 +293,22 @@ chrome.runtime.onStartup.addListener(() => {
           console.log('Statut du serveur:', status);
           // Vérifier l'authentification seulement si le serveur est connecté
           if (status === 'connected') {
-            // Ajouter un court délai avant de vérifier l'authentification
+            // Délai plus long avant de vérifier l'authentification
             setTimeout(() => {
               checkAuthentication()
                 .then(authenticated => {
                   console.log("Statut d'authentification:", authenticated ? 'Authentifié' : 'Non authentifié');
+                  // Ne pas déclencher d'autres vérifications automatiques
                 })
                 .catch(error => {
                   console.error("Erreur lors de la vérification d'authentification:", error);
                 });
-            }, 500);
+            }, 2000);
           }
         })
         .catch(error => {
           console.error('Erreur lors de la vérification du serveur:', error);
         });
-    }, 1000);
+    }, 2000);
   });
 });
