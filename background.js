@@ -10,10 +10,33 @@ let authCheckInProgress = false;
 let lastAuthCheckTime = 0;
 const AUTH_CHECK_THROTTLE = 10000; // 10 secondes minimum entre les vérifications
 
+// Suivi des appels pour éviter le spam
+let messageTimes = {};
+
 // Gestionnaire de messages depuis le popup ou les content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message reçu dans le background script:', message, 'De:', sender.tab ? 'content script' : 'popup');
   
+  // Protection contre les appels répétés depuis le popup
+  const now = Date.now();
+  const messageKey = message.action + (sender.tab ? 'content' : 'popup');
+  const lastCallTime = messageTimes[messageKey] || 0;
+  
+  // Si c'est un appel depuis le popup et qu'il est trop fréquent, bloquer pour certaines actions
+  if (!sender.tab && now - lastCallTime < 5000) { // 5 secondes minimum entre les appels popup
+    // Liste des actions sensibles qui ne doivent pas être répétées trop souvent
+    const sensitiveActions = ['getStatus', 'getUserData', 'validateToken', 'checkAuthentication'];
+    
+    if (sensitiveActions.includes(message.action)) {
+      console.log(`Action bloquée car trop fréquente (${message.action}), dernier appel il y a ${(now - lastCallTime)/1000}s`);
+      sendResponse({ blocked: true, message: 'Action trop fréquente' });
+      return true;
+    }
+  }
+  
+  // Enregistrer le temps de cet appel
+  messageTimes[messageKey] = now;
+
   if (message.action === 'getStatus') {
     // Vérification du statut de connexion
     checkServerConnection()
