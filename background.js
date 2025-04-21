@@ -56,6 +56,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'authenticationUpdated') {
     // Mise à jour du statut d'authentification
     isAuthenticated = message.authenticated;
+    
+    // Éviter les rafraîchissements en cascade si demandé
+    if (message.noRefresh) {
+      console.log("Mise à jour de l'authentification sans rafraîchissement en cascade");
+      sendResponse({ success: true });
+      return true;
+    }
+    
     sendResponse({ success: true });
     return true;
   }

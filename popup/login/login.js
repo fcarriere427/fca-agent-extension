@@ -111,6 +111,14 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Initialisation de l'application
   function initializeApp() {
+    // Détecter si cette instance est en cours d'initialisation
+    if (window.isInitializing) {
+      console.log('Initialisation déjà en cours, annulation de la duplication');
+      return;
+    }
+    
+    window.isInitializing = true;
+    
     // Récupérer la configuration du serveur
     chrome.storage.local.get(['apiBaseUrl'], (result) => {
       if (result.apiBaseUrl) {
@@ -123,13 +131,26 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.storage.local.set({ 'apiBaseUrl': apiBaseUrl });
       }
       
-      // Au lieu de faire une vérification automatique, demandons plutôt au background script
-      chrome.runtime.sendMessage({ action: 'getUserData' }, (response) => {
-        // Si déjà authentifié, rediriger
-        if (response && response.isAuthenticated) {
-          window.location.href = '../popup.html';
-        }
-      });
+      // Utiliser le localstorage pour éviter les vérifications en boucle
+      const lastCheckTime = localStorage.getItem('lastAuthCheck');
+      const now = Date.now();
+      
+      if (!lastCheckTime || now - parseInt(lastCheckTime) > 5000) {
+        // Enregistrer le temps de cette vérification
+        localStorage.setItem('lastAuthCheck', now.toString());
+        
+        // Vérifier l'authentification une seule fois
+        chrome.runtime.sendMessage({ action: 'getUserData' }, (response) => {
+          window.isInitializing = false;
+          // Si déjà authentifié, rediriger
+          if (response && response.isAuthenticated) {
+            window.location.href = '../popup.html';
+          }
+        });
+      } else {
+        console.log('Vérification d’auth effectuée récemment, utilisation du cache');
+        window.isInitializing = false;
+      }
     });
   }
   
@@ -156,11 +177,15 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error(data.error || 'Erreur de connexion');
       }
       
-      // Informer le background script
+      // Enregistrer le moment de la connexion
+      localStorage.setItem('lastAuthUpdate', Date.now().toString());
+      
+      // Informer le background script (une seule fois)
       return new Promise((resolve) => {
         chrome.runtime.sendMessage({ 
           action: 'authenticationUpdated', 
-          authenticated: true
+          authenticated: true,
+          noRefresh: true // Flag pour éviter un rafraîchissement en cascade
         }, () => {
           resolve({ success: true });
         });
@@ -173,7 +198,19 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Vérifier l'authentification
   async function checkAuthentication() {
+    // Vérifier si une vérification récente a déjà été faite
+    const lastAuthCheck = localStorage.getItem('lastAuthCheckDirect');
+    const now = Date.now();
+    
+    if (lastAuthCheck && now - parseInt(lastAuthCheck) < 5000) {
+      console.log('Vérification directe d’auth effectuée récemment, utilisation du cache');
+      return JSON.parse(localStorage.getItem('lastAuthResult') || 'false');
+    }
+    
     try {
+      // Enregistrer cette vérification
+      localStorage.setItem('lastAuthCheckDirect', now.toString());
+      
       const response = await fetch(`${apiBaseUrl}/auth/check`, {
         method: 'GET',
         credentials: 'include', // Important: inclure les cookies
@@ -185,7 +222,11 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       
       const data = await response.json();
-      return data.authenticated === true;
+      const result = data.authenticated === true;
+      
+      // Mémoriser le résultat
+      localStorage.setItem('lastAuthResult', JSON.stringify(result));
+      return result;
     } catch (error) {
       console.error('Erreur lors de la vérification d\'authentification:', error);
       return false;
@@ -195,6 +236,18 @@ document.addEventListener('DOMContentLoaded', () => {
   // Vérifier le statut du serveur via le background script
   function checkServerStatus() {
     if (!apiBaseUrl) return;
+    
+    // Vérifier si une vérification récente a déjà été faite
+    const lastStatusCheck = localStorage.getItem('lastStatusCheck');
+    const now = Date.now();
+    
+    if (lastStatusCheck && now - parseInt(lastStatusCheck) < 5000) {
+      console.log('Vérification de statut effectuée récemment, utilisation du cache');
+      return;
+    }
+    
+    // Enregistrer cette vérification
+    localStorage.setItem('lastStatusCheck', now.toString());
     
     // Utiliser le background script pour vérifier le statut du serveur
     chrome.runtime.sendMessage({ action: 'getStatus' }, (response) => {
