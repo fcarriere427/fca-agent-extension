@@ -15,17 +15,12 @@
     </header>
 
     <div class="auth-container">
-      <div class="auth-tabs">
-        <button id="login-tab" class="auth-tab active">Connexion</button>
-        <button id="register-tab" class="auth-tab">Inscription</button>
+      <div class="auth-title">
+        <h2>Connexion</h2>
       </div>
       
-      <!-- Formulaire de connexion -->
+      <!-- Formulaire de connexion simplifié -->
       <form id="login-form" class="auth-form">
-        <div class="form-group">
-          <label for="login-username">Nom d'utilisateur</label>
-          <input type="text" id="login-username" required>
-        </div>
         <div class="form-group">
           <label for="login-password">Mot de passe</label>
           <input type="password" id="login-password" required>
@@ -34,30 +29,6 @@
           <button type="submit" class="btn btn-primary">Se connecter</button>
         </div>
         <div id="login-error" class="error-message"></div>
-      </form>
-      
-      <!-- Formulaire d'inscription -->
-      <form id="register-form" class="auth-form" style="display: none;">
-        <div class="form-group">
-          <label for="register-username">Nom d'utilisateur</label>
-          <input type="text" id="register-username" required>
-        </div>
-        <div class="form-group">
-          <label for="register-email">Email</label>
-          <input type="email" id="register-email">
-        </div>
-        <div class="form-group">
-          <label for="register-password">Mot de passe</label>
-          <input type="password" id="register-password" required>
-        </div>
-        <div class="form-group">
-          <label for="register-confirm-password">Confirmer le mot de passe</label>
-          <input type="password" id="register-confirm-password" required>
-        </div>
-        <div class="form-action">
-          <button type="submit" class="btn btn-primary">S'inscrire</button>
-        </div>
-        <div id="register-error" class="error-message"></div>
       </form>
     </div>
     
@@ -72,16 +43,10 @@
       </div>
     </div>
     
-    <!-- Bouton de debug temporaire -->
+    <!-- Zone de statut -->
     <div style="margin-top: 10px; text-align: center;">
-      <button id="show-token-btn" class="btn btn-small">Afficher le token JWT</button>
-      <div id="token-display" style="margin-top: 5px; word-break: break-all; font-size: 10px; max-height: 100px; overflow-y: auto; display: none;"></div>
-      
-      <button id="verify-token-btn" class="btn btn-small" style="margin-top: 10px;">Vérifier le token</button>
-      <div id="verify-result" style="margin-top: 5px; font-size: 12px; display: none;"></div>
-      
-      <button id="test-profile-btn" class="btn btn-small" style="margin-top: 10px;">Tester accès au profil</button>
-      <div id="profile-result" style="margin-top: 5px; font-size: 12px; display: none;"></div>
+      <button id="check-auth-btn" class="btn btn-small">Vérifier l'authentification</button>
+      <div id="auth-result" style="margin-top: 5px; font-size: 12px; display: none;"></div>
     </div>
   </div>
   
