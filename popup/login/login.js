@@ -122,14 +122,17 @@ document.addEventListener('DOMContentLoaded', () => {
         chrome.storage.local.set({ 'apiBaseUrl': apiBaseUrl });
       }
       
-      // Vérifier si l'utilisateur est déjà connecté
-      checkAuthentication().then(isAuthenticated => {
-        if (isAuthenticated) {
-          window.location.href = '../popup.html';
-        }
-      }).catch(error => {
-        console.error('Erreur lors de la vérification d\'authentification:', error);
-      });
+      // Ajouter un délai avant la vérification d'authentification
+      setTimeout(() => {
+        // On vérifie l'authentification une seule fois au démarrage
+        checkAuthentication().then(isAuthenticated => {
+          if (isAuthenticated) {
+            window.location.href = '../popup.html';
+          }
+        }).catch(error => {
+          console.error('Erreur lors de la vérification d\'authentification:', error);
+        });
+      }, 1000); // Délai de 1 seconde
     });
   }
   

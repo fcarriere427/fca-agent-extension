@@ -5,6 +5,11 @@
 let API_BASE_URL = 'http://fca-agent.letsq.xyz/api'; // Valeur par défaut, sera mise à jour depuis le stockage
 let isAuthenticated = false;
 
+// Variables pour éviter les vérifications simultanées
+let authCheckInProgress = false;
+let lastAuthCheckTime = 0;
+const AUTH_CHECK_THROTTLE = 2000; // 2 secondes minimum entre les vérifications
+
 // Gestionnaire de messages depuis le popup ou les content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message reçu dans le background script:', message, 'De:', sender.tab ? 'content script' : 'popup');
@@ -93,7 +98,24 @@ async function checkServerConnection() {
 
 // Vérifie si l'utilisateur est authentifié
 async function checkAuthentication() {
+  // Éviter les vérifications simultanées
+  if (authCheckInProgress) {
+    console.log('Vérification d\'authentification déjà en cours, utilisation de l\''état actuel');
+    return isAuthenticated;
+  }
+  
+  // Limiter la fréquence des vérifications
+  const now = Date.now();
+  if (now - lastAuthCheckTime < AUTH_CHECK_THROTTLE) {
+    console.log('Vérification d\'authentification trop fréquente, utilisation de l\''état actuel');
+    return isAuthenticated;
+  }
+  
   try {
+    authCheckInProgress = true;
+    lastAuthCheckTime = now;
+    console.log('Exécution d\'une vérification d\'authentification...');
+    
     const response = await fetch(`${API_BASE_URL}/auth/check`, {
       method: 'GET',
       credentials: 'include', // Important pour envoyer les cookies
@@ -106,11 +128,17 @@ async function checkAuthentication() {
     
     const data = await response.json();
     isAuthenticated = data.authenticated === true;
+    console.log('Vérification d\'authentification terminée, résultat:', isAuthenticated);
     return isAuthenticated;
   } catch (error) {
     console.error('Erreur lors de la vérification d\'authentification:', error);
     isAuthenticated = false;
     return false;
+  } finally {
+    // Déverrouiller la vérification
+    setTimeout(() => {
+      authCheckInProgress = false;
+    }, 500);
   }
 }
 
@@ -190,23 +218,30 @@ chrome.runtime.onInstalled.addListener(() => {
       console.log('URL API par défaut définie:', API_BASE_URL);
     }
     
-    // Vérification de l'authentification
-    checkAuthentication()
-      .then(authenticated => {
-        console.log('Statut d\'authentification:', authenticated ? 'Authentifié' : 'Non authentifié');
-      })
-      .catch(error => {
-        console.error('Erreur lors de la vérification de l\'authentification:', error);
-      });
-
-    // Vérification du serveur
-    checkServerConnection()
-      .then(status => {
-        console.log('Statut du serveur:', status);
-      })
-      .catch(error => {
-        console.error('Erreur lors de la vérification du serveur:', error);
-      });
+    // Une série séquentielle de vérifications avec délai
+    setTimeout(() => {
+      // Vérifier d'abord le statut du serveur
+      checkServerConnection()
+        .then(status => {
+          console.log('Statut du serveur:', status);
+          // Vérifier l'authentification seulement si le serveur est connecté
+          if (status === 'connected') {
+            // Ajouter un court délai avant de vérifier l'authentification
+            setTimeout(() => {
+              checkAuthentication()
+                .then(authenticated => {
+                  console.log('Statut d\'authentification:', authenticated ? 'Authentifié' : 'Non authentifié');
+                })
+                .catch(error => {
+                  console.error('Erreur lors de la vérification d\'authentification:', error);
+                });
+            }, 500);
+          }
+        })
+        .catch(error => {
+          console.error('Erreur lors de la vérification du serveur:', error);
+        });
+    }, 1000);
   });
 });
 
@@ -219,13 +254,29 @@ chrome.runtime.onStartup.addListener(() => {
       console.log('URL API chargée depuis le stockage local:', API_BASE_URL);
     }
     
-    // Vérification de l'authentification
-    checkAuthentication()
-      .then(authenticated => {
-        console.log('Statut d\'authentification:', authenticated ? 'Authentifié' : 'Non authentifié');
-      })
-      .catch(error => {
-        console.error('Erreur lors de la vérification de l\'authentification:', error);
-      });
+    // Une série séquentielle de vérifications avec délai
+    setTimeout(() => {
+      // Vérifier d'abord le statut du serveur
+      checkServerConnection()
+        .then(status => {
+          console.log('Statut du serveur:', status);
+          // Vérifier l'authentification seulement si le serveur est connecté
+          if (status === 'connected') {
+            // Ajouter un court délai avant de vérifier l'authentification
+            setTimeout(() => {
+              checkAuthentication()
+                .then(authenticated => {
+                  console.log('Statut d\'authentification:', authenticated ? 'Authentifié' : 'Non authentifié');
+                })
+                .catch(error => {
+                  console.error('Erreur lors de la vérification d\'authentification:', error);
+                });
+            }, 500);
+          }
+        })
+        .catch(error => {
+          console.error('Erreur lors de la vérification du serveur:', error);
+        });
+    }, 1000);
   });
 });
