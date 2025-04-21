@@ -1,42 +1,14 @@
-// FCA-Agent - Background Service Worker (version simplifiée)
+// FCA-Agent - Background Service Worker (version ultra-simplifiée)
 // Gère les communications avec le serveur Raspberry Pi
 
 // Configuration
 let API_BASE_URL = 'http://fca-agent.letsq.xyz/api'; // Valeur par défaut, sera mise à jour depuis le stockage
 let isAuthenticated = false;
 
-// Variables pour éviter les vérifications simultanées
-let authCheckInProgress = false;
-let lastAuthCheckTime = 0;
-const AUTH_CHECK_THROTTLE = 10000; // 10 secondes minimum entre les vérifications
-
-// Suivi des appels pour éviter le spam
-let messageTimes = {};
-
 // Gestionnaire de messages depuis le popup ou les content scripts
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   console.log('Message reçu dans le background script:', message, 'De:', sender.tab ? 'content script' : 'popup');
   
-  // Protection contre les appels répétés depuis le popup
-  const now = Date.now();
-  const messageKey = message.action + (sender.tab ? 'content' : 'popup');
-  const lastCallTime = messageTimes[messageKey] || 0;
-  
-  // Si c'est un appel depuis le popup et qu'il est trop fréquent, bloquer pour certaines actions
-  if (!sender.tab && now - lastCallTime < 5000) { // 5 secondes minimum entre les appels popup
-    // Liste des actions sensibles qui ne doivent pas être répétées trop souvent
-    const sensitiveActions = ['getStatus', 'getUserData', 'validateToken', 'checkAuthentication'];
-    
-    if (sensitiveActions.includes(message.action)) {
-      console.log(`Action bloquée car trop fréquente (${message.action}), dernier appel il y a ${(now - lastCallTime)/1000}s`);
-      sendResponse({ blocked: true, message: 'Action trop fréquente' });
-      return true;
-    }
-  }
-  
-  // Enregistrer le temps de cet appel
-  messageTimes[messageKey] = now;
-
   if (message.action === 'getStatus') {
     // Vérification du statut de connexion
     checkServerConnection()
@@ -56,20 +28,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'authenticationUpdated') {
     // Mise à jour du statut d'authentification
     isAuthenticated = message.authenticated;
-    
-    // Éviter les rafraîchissements en cascade si demandé
-    if (message.noRefresh) {
-      console.log("Mise à jour de l'authentification sans rafraîchissement en cascade");
-      sendResponse({ success: true });
-      return true;
-    }
-    
     sendResponse({ success: true });
     return true;
   }
   
   if (message.action === 'getUserData') {
-    // Vérifie d'abord l'authentification
+    // Vérifie l'authentification de manière simple, sans boucles infinies
     checkAuthentication()
       .then(authenticated => {
         sendResponse({ 
@@ -106,36 +70,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-// Variables pour limiter les appels de vérification de statut serveur
-let serverCheckInProgress = false;
-let lastServerCheckTime = 0;
-let cachedServerStatus = 'unknown';
-const SERVER_CHECK_THROTTLE = 10000; // 10 secondes entre les vérifications
-
-// Vérifie la connexion au serveur
+// Vérifie la connexion au serveur - version simplifiée
 async function checkServerConnection() {
-  // Éviter les vérifications simultanées
-  if (serverCheckInProgress) {
-    console.log("Vérification du serveur déjà en cours, utilisation du statut en cache");
-    return cachedServerStatus;
-  }
-  
-  // Limiter la fréquence des vérifications
-  const now = Date.now();
-  if (now - lastServerCheckTime < SERVER_CHECK_THROTTLE) {
-    console.log("Vérification du serveur trop fréquente, utilisation du statut en cache");
-    return cachedServerStatus;
-  }
-  
   try {
-    serverCheckInProgress = true;
-    lastServerCheckTime = now;
-    console.log("Exécution d'une vérification de statut serveur...");
-    
     const response = await fetch(`${API_BASE_URL}/status`, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' },
-      mode: 'cors' // Explicitement utiliser le mode CORS standard
+      mode: 'cors'
     });
     
     if (!response.ok) {
@@ -143,43 +84,19 @@ async function checkServerConnection() {
     }
     
     const data = await response.json();
-    cachedServerStatus = data.status || 'connected';
-    return cachedServerStatus;
+    return data.status || 'connected';
   } catch (error) {
     console.error('Erreur de connexion au serveur:', error);
-    cachedServerStatus = 'disconnected';
     return 'disconnected';
-  } finally {
-    // Déverrouiller la vérification avec un délai
-    setTimeout(() => {
-      serverCheckInProgress = false;
-    }, 1000);
   }
 }
 
-// Vérifie si l'utilisateur est authentifié
+// Vérifie si l'utilisateur est authentifié - version simplifiée
 async function checkAuthentication() {
-  // Éviter les vérifications simultanées
-  if (authCheckInProgress) {
-    console.log("Vérification d'authentification déjà en cours, utilisation de l'état actuel");
-    return isAuthenticated;
-  }
-  
-  // Limiter la fréquence des vérifications
-  const now = Date.now();
-  if (now - lastAuthCheckTime < AUTH_CHECK_THROTTLE) {
-    console.log("Vérification d'authentification trop fréquente, utilisation de l'état actuel");
-    return isAuthenticated;
-  }
-  
   try {
-    authCheckInProgress = true;
-    lastAuthCheckTime = now;
-    console.log("Exécution d'une vérification d'authentification...");
-    
     const response = await fetch(`${API_BASE_URL}/auth/check`, {
       method: 'GET',
-      credentials: 'include', // Important pour envoyer les cookies
+      credentials: 'include',
       mode: 'cors'
     });
     
@@ -195,11 +112,6 @@ async function checkAuthentication() {
     console.error("Erreur lors de la vérification d'authentification:", error);
     isAuthenticated = false;
     return false;
-  } finally {
-    // Déverrouiller la vérification
-    setTimeout(() => {
-      authCheckInProgress = false;
-    }, 500);
   }
 }
 
@@ -208,7 +120,7 @@ async function logout() {
   try {
     const response = await fetch(`${API_BASE_URL}/auth/logout`, {
       method: 'POST',
-      credentials: 'include', // Important pour envoyer les cookies
+      credentials: 'include',
       mode: 'cors'
     });
     
@@ -243,7 +155,7 @@ async function executeTask(taskType, taskData) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ type: taskType, data: taskData }),
-      credentials: 'include', // Important pour envoyer les cookies
+      credentials: 'include',
       mode: 'cors'
     });
     
@@ -263,14 +175,14 @@ async function executeTask(taskType, taskData) {
   }
 }
 
-// Initialisation: vérification du serveur au démarrage
+// Initialisation simple : récupérer l'URL de l'API
 chrome.runtime.onInstalled.addListener(() => {
   console.log('FCA-Agent installé/mis à jour');
   
   // Récupérer l'URL de l'API
-  chrome.storage.local.get(['apiBaseUrl'], (localResult) => {
-    if (localResult.apiBaseUrl) {
-      API_BASE_URL = localResult.apiBaseUrl;
+  chrome.storage.local.get(['apiBaseUrl'], (result) => {
+    if (result.apiBaseUrl) {
+      API_BASE_URL = result.apiBaseUrl;
       console.log('URL API chargée depuis le stockage local:', API_BASE_URL);
     } else {
       // Valeur par défaut
@@ -278,68 +190,15 @@ chrome.runtime.onInstalled.addListener(() => {
       chrome.storage.local.set({ 'apiBaseUrl': API_BASE_URL });
       console.log('URL API par défaut définie:', API_BASE_URL);
     }
-    
-    // Faire une seule vérification au démarrage avec un délai plus long
-    setTimeout(() => {
-      // Vérifier d'abord le statut du serveur
-      checkServerConnection()
-        .then(status => {
-          console.log('Statut du serveur:', status);
-          // Vérifier l'authentification seulement si le serveur est connecté
-          if (status === 'connected') {
-            // Ajouter un délai plus long avant de vérifier l'authentification
-            setTimeout(() => {
-              checkAuthentication()
-                .then(authenticated => {
-                  console.log("Statut d'authentification:", authenticated ? 'Authentifié' : 'Non authentifié');
-                  // Ne pas programmer d'autres vérifications automatiques
-                })
-                .catch(error => {
-                  console.error("Erreur lors de la vérification d'authentification:", error);
-                });
-            }, 2000); // Délai plus long (2 secondes)
-          }
-        })
-        .catch(error => {
-          console.error('Erreur lors de la vérification du serveur:', error);
-        });
-    }, 2000); // Délai plus long (2 secondes)
   });
 });
 
-// Événement au démarrage de l'extension
+// Au démarrage, uniquement charger l'URL de l'API
 chrome.runtime.onStartup.addListener(() => {
-  // Récupérer l'URL de l'API du stockage local
-  chrome.storage.local.get(['apiBaseUrl'], (localResult) => {
-    if (localResult.apiBaseUrl) {
-      API_BASE_URL = localResult.apiBaseUrl;
+  chrome.storage.local.get(['apiBaseUrl'], (result) => {
+    if (result.apiBaseUrl) {
+      API_BASE_URL = result.apiBaseUrl;
       console.log('URL API chargée depuis le stockage local:', API_BASE_URL);
     }
-    
-    // Une seule vérification au démarrage, avec délais plus longs
-    setTimeout(() => {
-      // Vérifier d'abord le statut du serveur
-      checkServerConnection()
-        .then(status => {
-          console.log('Statut du serveur:', status);
-          // Vérifier l'authentification seulement si le serveur est connecté
-          if (status === 'connected') {
-            // Délai plus long avant de vérifier l'authentification
-            setTimeout(() => {
-              checkAuthentication()
-                .then(authenticated => {
-                  console.log("Statut d'authentification:", authenticated ? 'Authentifié' : 'Non authentifié');
-                  // Ne pas déclencher d'autres vérifications automatiques
-                })
-                .catch(error => {
-                  console.error("Erreur lors de la vérification d'authentification:", error);
-                });
-            }, 2000);
-          }
-        })
-        .catch(error => {
-          console.error('Erreur lors de la vérification du serveur:', error);
-        });
-    }, 2000);
   });
 });

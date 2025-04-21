@@ -1,71 +1,50 @@
-// FCA-Agent - Script de la page de connexion (version simplifiée)
-// Point d'entrée unique pour l'authentification
+// FCA-Agent - Script de la page de connexion (version ultra-simplifiée)
 
 document.addEventListener('DOMContentLoaded', () => {
   // Éléments DOM
   const loginForm = document.getElementById('login-form');
+  const loginButton = document.querySelector('.btn-primary');
+  const passwordInput = document.getElementById('login-password');
   const statusIndicator = document.getElementById('status-indicator');
   const serverConfigBtn = document.getElementById('server-config-btn');
   const serverConfigPanel = document.getElementById('server-config-panel');
   const serverUrlInput = document.getElementById('server-url');
   const saveServerConfig = document.getElementById('save-server-config');
   const loginError = document.getElementById('login-error');
-  const checkAuthBtn = document.getElementById('check-auth-btn');
-  const authResult = document.getElementById('auth-result');
   
-  // Variables globales
-  let apiBaseUrl = '';
-  
-  // Initialisation
-  initializeApp();
-  
-  // Vérification du statut de connexion au serveur
-  checkServerStatus();
+  // Récupérer l'URL du serveur au démarrage
+  let serverUrl = '';
+  chrome.storage.local.get(['apiBaseUrl'], (result) => {
+    if (result.apiBaseUrl) {
+      serverUrl = result.apiBaseUrl;
+      serverUrlInput.value = serverUrl;
+    } else {
+      // Valeur par défaut
+      serverUrl = 'http://fca-agent.letsq.xyz/api';
+      serverUrlInput.value = serverUrl;
+      chrome.storage.local.set({ 'apiBaseUrl': serverUrl });
+    }
+    
+    // Définir le statut de connexion
+    updateStatus();
+  });
   
   // Gestionnaire pour le formulaire de connexion
-  loginForm.addEventListener('submit', async (e) => {
+  loginForm.addEventListener('submit', (e) => {
     e.preventDefault();
     
-    const password = document.getElementById('login-password').value;
-    
+    const password = passwordInput.value;
     if (!password) {
-      displayError(loginError, 'Veuillez saisir un mot de passe');
+      showError('Veuillez saisir un mot de passe');
       return;
     }
     
-    loginError.textContent = '';
+    // Désactiver le bouton pendant la connexion
+    loginButton.disabled = true;
+    loginButton.textContent = 'Connexion en cours...';
     
-    try {
-      // Affichage d'un message de chargement
-      const loadingMsg = document.createElement('div');
-      loadingMsg.textContent = 'Connexion en cours...';
-      loadingMsg.style.marginTop = '10px';
-      loginForm.appendChild(loadingMsg);
-      
-      const result = await login(password);
-      
-      // Suppression du message de chargement
-      loginForm.removeChild(loadingMsg);
-      
-      if (result.success) {
-        // Montrer un message de succès à la place de rediriger immédiatement
-        loginForm.innerHTML = `
-          <div style="text-align: center; color: #28a745;">
-            <p>Connexion réussie!</p>
-            <button id="continue-btn" class="btn btn-primary" style="margin-top: 15px;">Continuer</button>
-          </div>
-        `;
-        
-        // Ajouter l'événement pour continuer
-        document.getElementById('continue-btn').addEventListener('click', () => {
-          window.location.href = '../popup.html';
-        });
-      } else {
-        displayError(loginError, result.error || 'Erreur de connexion');
-      }
-    } catch (error) {
-      displayError(loginError, error.message || 'Erreur de connexion');
-    }
+    // Tenter la connexion
+    attemptLogin(password);
   });
   
   // Configuration du serveur
@@ -76,196 +55,87 @@ document.addEventListener('DOMContentLoaded', () => {
   saveServerConfig.addEventListener('click', () => {
     const newUrl = serverUrlInput.value.trim();
     if (newUrl) {
-      // Sauvegarder la configuration
-      chrome.storage.local.set({ 'apiBaseUrl': newUrl }, () => {
-        apiBaseUrl = newUrl;
-        serverConfigPanel.style.display = 'none';
-        checkServerStatus();
-      });
+      serverUrl = newUrl;
+      chrome.storage.local.set({ 'apiBaseUrl': newUrl }, updateStatus);
+      serverConfigPanel.style.display = 'none';
     }
   });
   
-  // Vérification d'authentification
-  checkAuthBtn.addEventListener('click', async () => {
+  // Fonction simple de connexion
+  async function attemptLogin(password) {
     try {
-      authResult.textContent = 'Vérification en cours...';
-      authResult.style.display = 'block';
-      authResult.style.color = '#333';
+      console.log('Tentative de connexion au serveur:', serverUrl);
       
-      const isAuthenticated = await checkAuthentication();
-      
-      if (isAuthenticated) {
-        authResult.textContent = 'Vous êtes authentifié!';
-        authResult.style.color = '#28a745';
-      } else {
-        authResult.textContent = 'Vous n\'êtes pas authentifié';
-        authResult.style.color = '#dc3545';
-      }
-    } catch (error) {
-      authResult.textContent = `Erreur: ${error.message}`;
-      authResult.style.color = '#dc3545';
-    }
-  });
-  
-  // Fonctions
-  
-  // Initialisation de l'application
-  function initializeApp() {
-    // Détecter si cette instance est en cours d'initialisation
-    if (window.isInitializing) {
-      console.log('Initialisation déjà en cours, annulation de la duplication');
-      return;
-    }
-    
-    window.isInitializing = true;
-    
-    // Récupérer la configuration du serveur
-    chrome.storage.local.get(['apiBaseUrl'], (result) => {
-      if (result.apiBaseUrl) {
-        apiBaseUrl = result.apiBaseUrl;
-        serverUrlInput.value = apiBaseUrl;
-      } else {
-        // Valeur par défaut
-        apiBaseUrl = 'http://fca-agent.letsq.xyz/api';
-        serverUrlInput.value = apiBaseUrl;
-        chrome.storage.local.set({ 'apiBaseUrl': apiBaseUrl });
-      }
-      
-      // Utiliser le localstorage pour éviter les vérifications en boucle
-      const lastCheckTime = localStorage.getItem('lastAuthCheck');
-      const now = Date.now();
-      
-      if (!lastCheckTime || now - parseInt(lastCheckTime) > 5000) {
-        // Enregistrer le temps de cette vérification
-        localStorage.setItem('lastAuthCheck', now.toString());
-        
-        // Vérifier l'authentification une seule fois
-        chrome.runtime.sendMessage({ action: 'getUserData' }, (response) => {
-          window.isInitializing = false;
-          // Si déjà authentifié, rediriger
-          if (response && response.isAuthenticated) {
-            window.location.href = '../popup.html';
-          }
-        });
-      } else {
-        console.log('Vérification d’auth effectuée récemment, utilisation du cache');
-        window.isInitializing = false;
-      }
-    });
-  }
-  
-  // Connexion utilisateur
-  async function login(password) {
-    try {
-      console.log('Tentative de connexion');
-      console.log('URL API:', apiBaseUrl);
-      
-      const response = await fetch(`${apiBaseUrl}/auth/login`, {
+      const response = await fetch(`${serverUrl}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
-        credentials: 'include', // Important: inclure les cookies
+        credentials: 'include',
         mode: 'cors'
       });
       
-      console.log('Réponse du serveur:', response.status);
-      
       const data = await response.json();
-      console.log('Données reçues du serveur:', JSON.stringify(data));
       
-      if (!response.ok) {
-        throw new Error(data.error || 'Erreur de connexion');
-      }
+      // Réactiver le bouton
+      loginButton.disabled = false;
+      loginButton.textContent = 'Se connecter';
       
-      // Enregistrer le moment de la connexion
-      localStorage.setItem('lastAuthUpdate', Date.now().toString());
-      
-      // Informer le background script (une seule fois)
-      return new Promise((resolve) => {
+      if (response.ok) {
+        console.log('Connexion réussie');
+        
+        // Indiquer au background script que l'authentification a réussi
         chrome.runtime.sendMessage({ 
           action: 'authenticationUpdated', 
-          authenticated: true,
-          noRefresh: true // Flag pour éviter un rafraîchissement en cascade
-        }, () => {
-          resolve({ success: true });
+          authenticated: true 
         });
-      });
-    } catch (error) {
-      console.error('Erreur de login:', error);
-      return { success: false, error: error.message };
-    }
-  }
-  
-  // Vérifier l'authentification
-  async function checkAuthentication() {
-    // Vérifier si une vérification récente a déjà été faite
-    const lastAuthCheck = localStorage.getItem('lastAuthCheckDirect');
-    const now = Date.now();
-    
-    if (lastAuthCheck && now - parseInt(lastAuthCheck) < 5000) {
-      console.log('Vérification directe d’auth effectuée récemment, utilisation du cache');
-      return JSON.parse(localStorage.getItem('lastAuthResult') || 'false');
-    }
-    
-    try {
-      // Enregistrer cette vérification
-      localStorage.setItem('lastAuthCheckDirect', now.toString());
-      
-      const response = await fetch(`${apiBaseUrl}/auth/check`, {
-        method: 'GET',
-        credentials: 'include', // Important: inclure les cookies
-        mode: 'cors'
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Erreur serveur: ${response.status}`);
+        
+        // Afficher un message de succès avant la redirection
+        loginForm.innerHTML = `
+          <div style="text-align: center; color: #28a745; margin: 20px 0;">
+            <p>Connexion réussie !</p>
+            <button id="continue-btn" class="btn btn-primary">Continuer</button>
+          </div>
+        `;
+        
+        document.getElementById('continue-btn').addEventListener('click', () => {
+          window.location.href = '../popup.html';
+        });
+      } else {
+        showError(data.error || 'Erreur de connexion');
       }
-      
-      const data = await response.json();
-      const result = data.authenticated === true;
-      
-      // Mémoriser le résultat
-      localStorage.setItem('lastAuthResult', JSON.stringify(result));
-      return result;
     } catch (error) {
-      console.error('Erreur lors de la vérification d\'authentification:', error);
-      return false;
+      console.error('Erreur de connexion:', error);
+      loginButton.disabled = false;
+      loginButton.textContent = 'Se connecter';
+      showError('Erreur de connexion au serveur');
     }
   }
   
-  // Vérifier le statut du serveur via le background script
-  function checkServerStatus() {
-    if (!apiBaseUrl) return;
-    
-    // Vérifier si une vérification récente a déjà été faite
-    const lastStatusCheck = localStorage.getItem('lastStatusCheck');
-    const now = Date.now();
-    
-    if (lastStatusCheck && now - parseInt(lastStatusCheck) < 5000) {
-      console.log('Vérification de statut effectuée récemment, utilisation du cache');
-      return;
-    }
-    
-    // Enregistrer cette vérification
-    localStorage.setItem('lastStatusCheck', now.toString());
-    
-    // Utiliser le background script pour vérifier le statut du serveur
-    chrome.runtime.sendMessage({ action: 'getStatus' }, (response) => {
-      if (response && response.status === 'connected') {
+  // Fonctions utilitaires simples
+  function showError(message) {
+    loginError.textContent = message;
+    loginError.style.display = 'block';
+  }
+  
+  function updateStatus() {
+    // Vérifier le statut du serveur une seule fois
+    fetch(`${serverUrl}/status`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    .then(response => {
+      if (response.ok) {
         statusIndicator.classList.remove('status-disconnected');
         statusIndicator.classList.add('status-connected');
         statusIndicator.title = 'Connecté au serveur';
       } else {
-        statusIndicator.classList.remove('status-connected');
-        statusIndicator.classList.add('status-disconnected');
-        statusIndicator.title = 'Déconnecté du serveur';
+        throw new Error();
       }
+    })
+    .catch(error => {
+      statusIndicator.classList.remove('status-connected');
+      statusIndicator.classList.add('status-disconnected');
+      statusIndicator.title = 'Déconnecté du serveur';
     });
-  }
-  
-  // Afficher un message d'erreur
-  function displayError(element, message) {
-    element.textContent = message;
-    element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }
 });

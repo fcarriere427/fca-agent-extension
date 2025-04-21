@@ -1,9 +1,6 @@
-// FCA-Agent - Script du popup (version optimisée sans boucles infinies)
+// FCA-Agent - Script du popup (version ultra-simplifiée)
 
 document.addEventListener('DOMContentLoaded', () => {
-  // Variables globales
-  let verificationDone = false;
-  
   // Éléments DOM
   const userInput = document.getElementById('user-input');
   const submitBtn = document.getElementById('submit-btn');
@@ -11,63 +8,108 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusIndicator = document.getElementById('status-indicator');
   const quickTaskButtons = document.querySelectorAll('.task-btn');
   
-  // Une seule vérification initiale
-  if (!verificationDone) {
-    verificationDone = true;
-    console.log("Exécution d'une vérification unique d'authentification");
-    performSingleAuthCheck();
+  // Vérifier si l'utilisateur est authentifié avant tout
+  checkAuthOnce(() => {
+    // Initialisation UI après vérification d'auth
+    setupUI();
+  });
+  
+  // Configuration de l'interface utilisateur
+  function setupUI() {
+    // Gestionnaire pour soumettre l'entrée utilisateur
+    submitBtn.addEventListener('click', () => {
+      processUserInput();
+    });
+    
+    // Gestionnaire pour soumettre avec Entrée
+    userInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        processUserInput();
+      }
+    });
+    
+    // Ajouter un bouton de déconnexion dans le header
+    const header = document.querySelector('header');
+    const logoutBtn = document.createElement('button');
+    logoutBtn.id = 'logout-btn';
+    logoutBtn.title = 'Déconnexion';
+    logoutBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>';
+    logoutBtn.addEventListener('click', handleLogout);
+    header.appendChild(logoutBtn);
+    
+    // Style pour le bouton déconnexion
+    const style = document.createElement('style');
+    style.textContent = `
+      #logout-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 5px;
+        margin-left: 10px;
+        color: #777;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 4px;
+      }
+      #logout-btn:hover {
+        background-color: #f0f0f0;
+        color: #d9534f;
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // Gestionnaires pour les boutons d'actions rapides
+    quickTaskButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const taskType = button.getAttribute('data-task');
+        executeQuickTask(taskType);
+      });
+    });
+    
+    // Mise à jour du statut de connexion
+    updateConnectionStatus();
   }
   
-  // Gestionnaire pour soumettre l'entrée utilisateur
-  submitBtn.addEventListener('click', () => {
-    processUserInput();
-  });
-  
-  // Gestionnaire pour soumettre avec Entrée
-  userInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      processUserInput();
-    }
-  });
-  
-  // Ajouter un bouton de déconnexion dans le header
-  const header = document.querySelector('header');
-  const logoutBtn = document.createElement('button');
-  logoutBtn.id = 'logout-btn';
-  logoutBtn.title = 'Déconnexion';
-  logoutBtn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>';
-  logoutBtn.addEventListener('click', handleLogout);
-  header.appendChild(logoutBtn);
-  
-  // Ajouter les styles pour le bouton de déconnexion
-  const style = document.createElement('style');
-  style.textContent = `
-    #logout-btn {
-      background: none;
-      border: none;
-      cursor: pointer;
-      padding: 5px;
-      margin-left: 10px;
-      color: #777;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      border-radius: 4px;
-    }
-    #logout-btn:hover {
-      background-color: #f0f0f0;
-      color: #d9534f;
-    }
-  `;
-  document.head.appendChild(style);
-  
-  // Gestionnaires pour les boutons d'actions rapides
-  quickTaskButtons.forEach(button => {
-    button.addEventListener('click', () => {
-      const taskType = button.getAttribute('data-task');
-      executeQuickTask(taskType);
+  // Vérification simple d'authentification
+  function checkAuthOnce(callback) {
+    chrome.runtime.sendMessage({ action: 'getUserData' }, (response) => {
+      if (!response || !response.isAuthenticated) {
+        console.log('Non authentifié, redirection vers login');
+        window.location.href = 'login/login.html';
+        return;
+      }
+      
+      console.log('Authentification OK');
+      if (callback) callback();
     });
-  });
+  }
+  
+  // Mise à jour du statut de connexion au serveur
+  function updateConnectionStatus() {
+    chrome.storage.local.get(['apiBaseUrl'], (result) => {
+      const serverUrl = result.apiBaseUrl || 'http://fca-agent.letsq.xyz/api';
+      
+      fetch(`${serverUrl}/status`, { 
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      })
+      .then(response => {
+        if (response.ok) {
+          statusIndicator.classList.remove('status-disconnected');
+          statusIndicator.classList.add('status-connected');
+          statusIndicator.title = 'Connecté au serveur';
+        } else {
+          throw new Error();
+        }
+      })
+      .catch(() => {
+        statusIndicator.classList.remove('status-connected');
+        statusIndicator.classList.add('status-disconnected');
+        statusIndicator.title = 'Déconnecté du serveur';
+      });
+    });
+  }
   
   // Traitement de l'entrée utilisateur
   function processUserInput() {
@@ -190,12 +232,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
   
-  // Afficher un message d'erreur
-  function displayError(element, message) {
-    element.textContent = message;
-    element.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }
-  
   // Gère la déconnexion
   function handleLogout() {
     chrome.runtime.sendMessage({ action: 'logout' }, (response) => {
@@ -203,72 +239,6 @@ document.addEventListener('DOMContentLoaded', () => {
         // Rediriger vers la page de connexion
         window.location.href = 'login/login.html';
       }
-    });
-  }
-  
-  // Effectue une seule vérification d'authentification et de statut
-  function performSingleAuthCheck() {
-    console.log("Vérification unique - Début");
-    
-    // Récupérer le token du stockage
-    chrome.storage.local.get(['authToken'], (result) => {
-      if (!result.authToken) {
-        // Aucun token, rediriger vers la page de connexion
-        console.log("Pas de token - Redirection vers login");
-        window.location.href = 'login/login.html';
-        return;
-      }
-      
-      console.log("Token trouvé - Vérification du statut serveur");
-      
-      // Vérifier le statut du serveur une seule fois
-      chrome.runtime.sendMessage({ action: 'getStatus' }, statusResponse => {
-        console.log("Réponse statut serveur:", statusResponse ? statusResponse.status : 'aucune réponse');
-        
-        // Mettre à jour l'indicateur de statut
-        if (statusResponse && statusResponse.status === 'connected') {
-          statusIndicator.classList.remove('status-disconnected');
-          statusIndicator.classList.add('status-connected');
-          statusIndicator.title = 'Connecté au serveur';
-          
-          console.log("Serveur connecté - Vérification token");
-          
-          // Si connecté, vérifier l'authentification une seule fois
-          chrome.runtime.sendMessage({ action: 'validateToken' }, authResponse => {
-            console.log("Réponse validation token:", authResponse ? authResponse.success : 'aucune réponse');
-            
-            if (!authResponse || !authResponse.success) {
-              // Token invalide, rediriger vers la page de connexion
-              console.log("Token invalide - Redirection vers login");
-              window.location.href = 'login/login.html';
-              return;
-            }
-            
-            console.log("Token valide - Récupération données utilisateur");
-            
-            // Si authentifié, récupérer les données utilisateur une seule fois
-            chrome.runtime.sendMessage({ action: 'getUserData' }, userData => {
-              console.log("Réponse données utilisateur:", userData);
-              
-              if (userData && userData.userData) {
-                // Mettre à jour le message de bienvenue
-                const welcomeMessage = responseArea.querySelector('.welcome-message');
-                if (welcomeMessage) {
-                  welcomeMessage.textContent = `Bonjour ${userData.userData.username || ''} ! Comment puis-je vous aider aujourd'hui ?`;
-                }
-              }
-              
-              console.log("Vérification unique terminée avec succès");
-            });
-          });
-        } else {
-          // Serveur déconnecté
-          console.log("Serveur déconnecté");
-          statusIndicator.classList.remove('status-connected');
-          statusIndicator.classList.add('status-disconnected');
-          statusIndicator.title = 'Déconnecté du serveur';
-        }
-      });
     });
   }
 });
