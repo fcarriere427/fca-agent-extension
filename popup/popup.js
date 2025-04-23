@@ -152,9 +152,80 @@ document.addEventListener('DOMContentLoaded', () => {
     let taskTitle = '';
     
     switch(taskType) {
+      case 'gmail-summary':
+        // Vérifier si nous sommes sur Gmail
+        chrome.tabs.query({active: true, currentWindow: true}, async (tabs) => {
+          // Récupérer l'URL de l'onglet actif
+          const activeTabUrl = tabs[0]?.url || '';
+          
+          if (!activeTabUrl.includes('mail.google.com')) {
+            // Si nous ne sommes pas sur Gmail, demander à l'utilisateur d'y aller
+            displayMessage('assistant', 'Pour utiliser cette fonctionnalité, veuillez ouvrir Gmail dans votre navigateur.');
+            return;
+          }
+          
+          // Demander à l'utilisateur un sujet de recherche optionnel
+          const searchQuery = prompt('Entrez un sujet spécifique pour cibler la synthèse (laissez vide pour une synthèse générale) :', '');
+          taskTitle = searchQuery ? `Synthèse des emails Gmail sur "${searchQuery}"` : 'Synthèse des emails Gmail';
+          
+          // Afficher un message indiquant que nous extrayons les emails
+          displayMessage('user', taskTitle);
+          const loadingMsgId = displayMessage('assistant', 'Extraction des emails en cours...');
+          
+          // Exécuter le script dans l'onglet pour extraire le contenu des emails
+          chrome.tabs.sendMessage(tabs[0].id, { action: 'getPageContent' }, (response) => {
+            if (chrome.runtime.lastError) {
+              removeMessage(loadingMsgId);
+              displayMessage('assistant', 'Erreur lors de l\'extraction des emails : ' + chrome.runtime.lastError.message);
+              return;
+            }
+            
+            if (!response || !response.success) {
+              removeMessage(loadingMsgId);
+              displayMessage('assistant', 'Impossible d\'extraire les emails. Veuillez vérifier que vous êtes bien connecté à Gmail.');
+              return;
+            }
+            
+            // Vérifier si le contenu est de type Gmail
+            const content = response.content;
+            if (content.type !== 'gmail' || (!content.data.emails && !content.data.openEmail)) {
+              removeMessage(loadingMsgId);
+              displayMessage('assistant', 'Aucun email à analyser. Veuillez ouvrir votre boîte de réception Gmail ou un email spécifique.');
+              return;
+            }
+            
+            // Mettre à jour le message de chargement
+            removeMessage(loadingMsgId);
+            const processingMsgId = displayMessage('assistant', 'Analyse des emails en cours avec Claude...');
+            
+            // Envoyer les données extraites au serveur pour traitement par Claude
+            chrome.runtime.sendMessage(
+              {
+                action: 'executeTask',
+                task: 'gmail-summary',
+                data: {
+                  emails: content.data.emails || [content.data],
+                  searchQuery: searchQuery
+                }
+              },
+              response => {
+                removeMessage(processingMsgId);
+                
+                if (response && response.success) {
+                  displayMessage('assistant', response.result.response);
+                } else {
+                  displayMessage('assistant', 'Désolé, je n\'ai pas pu analyser vos emails. ' +
+                                             (response?.error || 'Veuillez réessayer.'));
+                }
+              }
+            );
+          });
+        });
+        return; // Important: sortir ici car nous avons géré l'action de manière asynchrone
+        
       case 'email-summary':
-        taskPrompt = 'Résumer mes emails non lus';
-        taskTitle = 'Résumé des emails';
+        taskPrompt = 'Résumer mes emails Outlook non lus';
+        taskTitle = 'Résumé des emails Outlook';
         break;
       case 'teams-summary':
         taskPrompt = 'Résumer mes conversations Teams récentes';

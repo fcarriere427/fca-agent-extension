@@ -59,6 +59,72 @@ function extractPageContent() {
     // À implémenter selon les besoins
   }
   
+  // Extraction pour Gmail
+  else if (url.includes('mail.google.com')) {
+    content.type = 'gmail';
+    
+    // Si nous sommes dans la boîte de réception ou une autre liste d'emails
+    if (document.querySelector('.AO')) {
+      // Récupération des emails dans la liste (tableau principal)
+      const emailRows = document.querySelectorAll('tr.zA');
+      content.data.emails = Array.from(emailRows).map(row => {
+        // Informations de base pour chaque email dans la liste
+        return {
+          id: row.getAttribute('id') || '',
+          read: !row.classList.contains('zE'),  // zE = non lu
+          sender: row.querySelector('.yW span, .zF')?.textContent?.trim() || 'Inconnu',
+          subject: row.querySelector('.y6')?.textContent?.trim() || 'Sans objet',
+          preview: row.querySelector('.y2')?.textContent?.trim() || '',
+          time: row.querySelector('.xW span')?.textContent?.trim() || '',
+          hasAttachment: row.querySelector('.brd') !== null,  // .brd = icône pièce jointe
+          isStarred: row.querySelector('.T-KT:not(.aXw)') !== null
+        };
+      });
+      
+      // Récupération des libellés (catégories, dossiers, etc.)
+      const labels = document.querySelectorAll('.aim');
+      content.data.labels = Array.from(labels).map(label => {
+        return {
+          name: label.getAttribute('aria-label') || label.textContent.trim(),
+          unread: label.querySelector('.bsU') ? parseInt(label.querySelector('.bsU').textContent) : 0
+        };
+      });
+    }
+    
+    // Si un email est ouvert
+    const openEmail = document.querySelector('.adn');
+    if (openEmail) {
+      const emailHeader = openEmail.querySelector('.ha');
+      const emailBody = openEmail.querySelector('.a3s');
+      
+      // Détails complets de l'email ouvert
+      content.data.openEmail = {
+        subject: document.querySelector('h2.hP')?.textContent?.trim() || 'Sans objet',
+        sender: {
+          name: emailHeader?.querySelector('.gD')?.textContent?.trim() || 'Inconnu',
+          email: emailHeader?.querySelector('.go')?.textContent?.replace(/[<>]/g, '')?.trim() || ''
+        },
+        recipients: Array.from(emailHeader?.querySelectorAll('.g2') || []).map(el => {
+          return {
+            name: el.textContent.trim(),
+            email: el.getAttribute('email') || ''
+          };
+        }),
+        time: emailHeader?.querySelector('.g3')?.textContent?.trim() || '',
+        body: emailBody?.textContent?.trim() || '',
+        bodyHTML: emailBody?.innerHTML || '',
+        hasAttachments: document.querySelectorAll('.aQH').length > 0,
+        attachments: Array.from(document.querySelectorAll('.aQH') || []).map(att => {
+          return {
+            name: att.querySelector('.aV3')?.textContent?.trim() || 'Pièce jointe',
+            type: att.querySelector('.aVK')?.textContent?.trim() || '',
+            size: att.querySelector('.SaH2Ve')?.textContent?.trim() || ''
+          };
+        })
+      };
+    }
+  }
+  
   return content;
 }
 

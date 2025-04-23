@@ -9,7 +9,8 @@
   "permissions": [
     "activeTab",
     "scripting",
-    "storage"
+    "storage",
+    "tabs"
   ],
   "host_permissions": [
     "http://localhost:3001/*",
@@ -25,7 +26,8 @@
         "https://outlook.office.com/*",
         "https://teams.microsoft.com/*",
         "https://*.sharepoint.com/*",
-        "https://trello.com/*"
+        "https://trello.com/*",
+        "https://mail.google.com/*"
       ],
       "js": ["content.js"]
     }
