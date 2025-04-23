@@ -177,3 +177,8 @@ function fillFormFields(formData) {
 
 // Initialisation
 console.log('FCA-Agent content script chargé sur:', window.location.href);
+
+// Notification explicite pour le débogage Gmail
+if (window.location.href.includes('mail.google.com')) {
+  console.log('FCA-Agent content script actif sur Gmail!');
+}

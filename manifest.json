@@ -15,7 +15,8 @@
   "host_permissions": [
     "http://localhost:3001/*",
     "http://fca-agent.letsq.xyz/*",
-    "https://fca-agent.letsq.xyz/*"
+    "https://fca-agent.letsq.xyz/*",
+    "https://mail.google.com/*"
   ],
   "background": {
     "service_worker": "background.js"
@@ -23,11 +24,17 @@
   "content_scripts": [
     {
       "matches": [
+        "https://mail.google.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
         "https://outlook.office.com/*",
         "https://teams.microsoft.com/*",
         "https://*.sharepoint.com/*",
-        "https://trello.com/*",
-        "https://mail.google.com/*"
+        "https://trello.com/*"
       ],
       "js": ["content.js"]
     }
