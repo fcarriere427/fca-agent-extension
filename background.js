@@ -151,6 +151,7 @@ async function executeTask(taskType, taskData) {
     }
     
     // Exécuter la requête avec les cookies inclus
+    console.log(`Envoi de la tâche ${taskType} au serveur...`);
     const response = await fetch(`${API_BASE_URL}/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -168,7 +169,18 @@ async function executeTask(taskType, taskData) {
       throw new Error(`Erreur API: ${response.status}`);
     }
     
-    return await response.json();
+    const responseData = await response.json();
+    console.log(`Réponse reçue du serveur pour la tâche ${taskType}:`, {
+      taskId: responseData.taskId,
+      status: responseData.status,
+      hasResult: !!responseData.result,
+      resultDetails: responseData.result ? {
+        hasResponse: !!responseData.result.response,
+        responseLength: responseData.result.response ? responseData.result.response.length : 0,
+        responsePreview: responseData.result.response ? responseData.result.response.substring(0, 50) + '...' : 'Aucune réponse'
+      } : 'Pas de résultat'
+    });
+    return responseData;
   } catch (error) {
     console.error("Erreur lors de l'exécution de la tâche:", error);
     throw error;

@@ -289,8 +289,21 @@ document.addEventListener('DOMContentLoaded', () => {
                   console.log('Réponse reçue du serveur :', response);
                   
                   if (response && response.success) {
-                    console.log('Contenu de la réponse :', response.result);
-                    const responseText = response.result.response || 'Analyse terminée, mais aucun contenu reçu.';
+                    console.log('Inspection du résultat :', {
+                      hasResult: !!response.result,
+                      responseObj: response.result,
+                      responseText: response.result?.response,
+                      responseLength: response.result?.response?.length || 0
+                    });
+                    
+                    let responseText = '';
+                    if (response.result && response.result.response) {
+                      responseText = response.result.response;
+                    } else {
+                      console.error('Contenu de la réponse manquant ou format inattendu', response);
+                      responseText = 'Analyse terminée, mais le format de la réponse est incorrect. Vérifiez la console pour plus de détails.';
+                    }
+                    
                     displayMessage('assistant', responseText);
                   } else {
                     displayMessage('assistant', 'Désolé, je n\'ai pas pu analyser vos emails. ' +
@@ -366,37 +379,39 @@ document.addEventListener('DOMContentLoaded', () => {
     messageElement.id = messageId;
     messageElement.classList.add('message', `message-${sender}`, 'fade-in');
     
+    // Détecter si le texte contient du HTML
+    const containsHTML = /<[a-z][\s\S]*>/i.test(text);
+    
     // Vérifier si le texte est trop long
     if (text && text.length > 500) {
       console.log(`Message long détecté (${text.length} caractères)`);
       
-      // Gérer les retours à la ligne et le formatage
-      const formattedText = text.replace(/\n/g, '<br>');
-      
       // Créer un conteneur pour le texte avec défilement
       const textContainer = document.createElement('div');
       textContainer.className = 'message-text-container';
-      textContainer.innerHTML = formattedText;
+      
+      // Gérer les retours à la ligne et le formattage
+      if (containsHTML) {
+        textContainer.innerHTML = text; // Si c'est du HTML (comme le spinner)
+      } else {
+        textContainer.innerHTML = text.replace(/\n/g, '<br>'); // Simple conversion des retours à la ligne
+      }
       
       // Ajouter le conteneur au message
       messageElement.appendChild(textContainer);
-      
-      // Ajouter du CSS si nécessaire
-      const style = document.createElement('style');
-      style.textContent = `
-        .message-text-container {
-          max-height: 300px;
-          overflow-y: auto;
-          white-space: pre-wrap;
-          line-height: 1.4;
-        }
-      `;
-      document.head.appendChild(style);
     } else {
-      // Pour les messages courts, utiliser l'approche originale
-      const textElement = document.createElement('p');
-      textElement.textContent = text;
-      messageElement.appendChild(textElement);
+      // Pour les messages courts
+      if (containsHTML) {
+        // Si c'est du HTML (comme le spinner)
+        const container = document.createElement('div');
+        container.innerHTML = text;
+        messageElement.appendChild(container);
+      } else {
+        // Texte normal
+        const textElement = document.createElement('p');
+        textElement.textContent = text;
+        messageElement.appendChild(textElement);
+      }
     }
     
     responseArea.appendChild(messageElement);
