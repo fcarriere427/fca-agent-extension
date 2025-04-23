@@ -289,31 +289,42 @@ document.addEventListener('DOMContentLoaded', () => {
                   console.log('Réponse reçue du serveur :', response);
                   
                   if (response && response.success) {
-                    console.log('Inspection du résultat :', {
-                      hasResult: !!response.result,
-                      responseObj: response.result,
-                      responseText: response.result?.response,
-                      responseLength: response.result?.response?.length || 0,
-                      hasFullResponse: !!response.result?.fullResponse
-                    });
-                    
-                    let responseText = '';
-                    // Vérifier si nous avons une réponse normale
-                    if (response.result && response.result.response) {
-                      responseText = response.result.response;
+                    // Vérifier si on a une référence à une réponse complète disponible via API
+                    if (response.responseId && response.fullResponseAvailable) {
+                      console.log('Référence à une réponse complète détectée, ID:', response.responseId);
                       
-                      // Vérifier si nous avons une réponse tronquée et la version complète
-                      if (response.result.fullResponse) {
-                        console.log('Réponse tronquée détectée, longueur totale:', response.result.fullResponse.length);
-                        // Pour la démo, on peut utiliser la version complète directement
-                        responseText = response.result.fullResponse;
-                      }
-                    } else {
+                      // Afficher un message temporaire avec l'aperçu
+                      const tempMessageId = displayMessage('assistant', 
+                        `Chargement de la réponse complète...<br><br><em>Aperçu:</em> ${response.preview}`);
+                      
+                      // Récupérer la réponse complète depuis le serveur
+                      fetchFullResponse(response.responseId)
+                        .then(fullResponse => {
+                          // Supprimer le message temporaire
+                          removeMessage(tempMessageId);
+                          
+                          if (fullResponse && fullResponse.response) {
+                            // Afficher la réponse complète
+                            displayMessage('assistant', fullResponse.response);
+                          } else {
+                            displayMessage('assistant', 'Désolé, impossible de récupérer la réponse complète.');
+                          }
+                        })
+                        .catch(error => {
+                          // Supprimer le message temporaire
+                          removeMessage(tempMessageId);
+                          displayMessage('assistant', `Erreur lors de la récupération de la réponse complète: ${error.message}`);
+                        });
+                    } 
+                    // Sinon, vérifier si nous avons une réponse normale dans result.response
+                    else if (response.result && response.result.response) {
+                      displayMessage('assistant', response.result.response);
+                    } 
+                    // Si aucune réponse n'est disponible
+                    else {
                       console.error('Contenu de la réponse manquant ou format inattendu', response);
-                      responseText = 'Analyse terminée, mais le format de la réponse est incorrect. Vérifiez la console pour plus de détails.';
+                      displayMessage('assistant', 'Analyse terminée, mais le format de la réponse est incorrect. Vérifiez la console pour plus de détails.');
                     }
-                    
-                    displayMessage('assistant', responseText);
                   } else {
                     displayMessage('assistant', 'Désolé, je n\'ai pas pu analyser vos emails. ' +
                                                (response?.error || 'Veuillez réessayer.'));
@@ -375,6 +386,42 @@ document.addEventListener('DOMContentLoaded', () => {
     );
   }
   
+  // Récupérer une réponse complète depuis le serveur
+  async function fetchFullResponse(responseId) {
+    try {
+      // Récupérer l'URL de l'API
+      let apiBaseUrl = '';
+      
+      const getApiUrl = () => {
+        return new Promise((resolve) => {
+          chrome.storage.local.get(['apiBaseUrl'], (result) => {
+            resolve(result.apiBaseUrl || 'http://fca-agent.letsq.xyz/api');
+          });
+        });
+      };
+      
+      apiBaseUrl = await getApiUrl();
+      
+      // Appel à l'API pour récupérer la réponse complète
+      console.log(`Récupération de la réponse complète depuis ${apiBaseUrl}/tasks/response/${responseId}`);
+      
+      const response = await fetch(`${apiBaseUrl}/tasks/response/${responseId}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include'
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Erreur lors de la récupération de la réponse complète:', error);
+      throw error;
+    }
+  }
+
   // Afficher un message dans la zone de réponse
   function displayMessage(sender, text) {
     // Supprimer le message de bienvenue s'il existe
