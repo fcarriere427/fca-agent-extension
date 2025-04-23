@@ -1,4 +1,12 @@
-/* FCA-Agent - Styles du popup */
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease-in;
+}/* FCA-Agent - Styles du popup */
 
 * {
   margin: 0;
@@ -128,7 +136,7 @@ h2 {
   padding: 12px;
   background-color: white;
   border-radius: 8px;
-  max-height: 200px;
+  max-height: 300px;
   overflow-y: auto;
   font-size: 14px;
   line-height: 1.4;
@@ -139,12 +147,32 @@ h2 {
   font-style: italic;
 }
 
-/* Animations */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.message {
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  border-radius: 8px;
+  max-width: 100%;
+  word-wrap: break-word;
 }
 
-.fade-in {
-  animation: fadeIn 0.3s ease-in;
+.message-user {
+  background-color: #e6f7ff;
+  align-self: flex-end;
+}
+
+.message-assistant {
+  background-color: #f0f0f0;
+  align-self: flex-start;
+}
+
+.message-text-container {
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  line-height: 1.4;
+  padding: 5px;
+}
+
+.message p {
+  margin: 0;
 }

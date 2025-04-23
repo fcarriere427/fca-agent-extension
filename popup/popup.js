@@ -246,12 +246,35 @@ document.addEventListener('DOMContentLoaded', () => {
               
               // Mettre à jour le message de chargement
               removeMessage(loadingMsgId);
-              const processingMsgId = displayMessage('assistant', 'Analyse des emails en cours avec Claude...');
+              const processingMsgId = displayMessage('assistant', 'Analyse des emails en cours avec Claude... <div class="loading-spinner"></div>');
+              
+              // Ajouter un style pour l'animation de chargement si nécessaire
+              const spinnerStyle = document.createElement('style');
+              spinnerStyle.textContent = `
+                .loading-spinner {
+                  width: 20px;
+                  height: 20px;
+                  border: 3px solid #f3f3f3;
+                  border-top: 3px solid #3498db;
+                  border-radius: 50%;
+                  animation: spin 1s linear infinite;
+                  margin: 10px auto;
+                }
+                @keyframes spin {
+                  0% { transform: rotate(0deg); }
+                  100% { transform: rotate(360deg); }
+                }
+              `;
+              document.head.appendChild(spinnerStyle);
               
               // Préparer les données
               const emails = content.data.emails || (content.data.openEmail ? [content.data] : []);
               
               // Envoyer les données extraites au serveur pour traitement par Claude
+              console.log('Envoi des données pour analyse :', {
+                emails: emails.length,
+                searchQuery: searchQuery
+              });
               chrome.runtime.sendMessage(
                 {
                   action: 'executeTask',
@@ -263,9 +286,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 },
                 response => {
                   removeMessage(processingMsgId);
+                  console.log('Réponse reçue du serveur :', response);
                   
                   if (response && response.success) {
-                    displayMessage('assistant', response.result.response);
+                    console.log('Contenu de la réponse :', response.result);
+                    const responseText = response.result.response || 'Analyse terminée, mais aucun contenu reçu.';
+                    displayMessage('assistant', responseText);
                   } else {
                     displayMessage('assistant', 'Désolé, je n\'ai pas pu analyser vos emails. ' +
                                                (response?.error || 'Veuillez réessayer.'));
@@ -340,10 +366,39 @@ document.addEventListener('DOMContentLoaded', () => {
     messageElement.id = messageId;
     messageElement.classList.add('message', `message-${sender}`, 'fade-in');
     
-    const textElement = document.createElement('p');
-    textElement.textContent = text;
+    // Vérifier si le texte est trop long
+    if (text && text.length > 500) {
+      console.log(`Message long détecté (${text.length} caractères)`);
+      
+      // Gérer les retours à la ligne et le formatage
+      const formattedText = text.replace(/\n/g, '<br>');
+      
+      // Créer un conteneur pour le texte avec défilement
+      const textContainer = document.createElement('div');
+      textContainer.className = 'message-text-container';
+      textContainer.innerHTML = formattedText;
+      
+      // Ajouter le conteneur au message
+      messageElement.appendChild(textContainer);
+      
+      // Ajouter du CSS si nécessaire
+      const style = document.createElement('style');
+      style.textContent = `
+        .message-text-container {
+          max-height: 300px;
+          overflow-y: auto;
+          white-space: pre-wrap;
+          line-height: 1.4;
+        }
+      `;
+      document.head.appendChild(style);
+    } else {
+      // Pour les messages courts, utiliser l'approche originale
+      const textElement = document.createElement('p');
+      textElement.textContent = text;
+      messageElement.appendChild(textElement);
+    }
     
-    messageElement.appendChild(textElement);
     responseArea.appendChild(messageElement);
     
     // Scroll vers le bas
