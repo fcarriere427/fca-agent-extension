@@ -293,12 +293,21 @@ document.addEventListener('DOMContentLoaded', () => {
                       hasResult: !!response.result,
                       responseObj: response.result,
                       responseText: response.result?.response,
-                      responseLength: response.result?.response?.length || 0
+                      responseLength: response.result?.response?.length || 0,
+                      hasFullResponse: !!response.result?.fullResponse
                     });
                     
                     let responseText = '';
+                    // Vérifier si nous avons une réponse normale
                     if (response.result && response.result.response) {
                       responseText = response.result.response;
+                      
+                      // Vérifier si nous avons une réponse tronquée et la version complète
+                      if (response.result.fullResponse) {
+                        console.log('Réponse tronquée détectée, longueur totale:', response.result.fullResponse.length);
+                        // Pour la démo, on peut utiliser la version complète directement
+                        responseText = response.result.fullResponse;
+                      }
                     } else {
                       console.error('Contenu de la réponse manquant ou format inattendu', response);
                       responseText = 'Analyse terminée, mais le format de la réponse est incorrect. Vérifiez la console pour plus de détails.';
