@@ -37,6 +37,14 @@ document.addEventListener('DOMContentLoaded', () => {
     logoutBtn.addEventListener('click', handleLogout);
     header.appendChild(logoutBtn);
     
+    // Ajouter un bouton de test
+    const testBtn = document.createElement('button');
+    testBtn.textContent = "Test API";
+    testBtn.style.marginBottom = "10px";
+    testBtn.style.marginLeft = "10px";
+    testBtn.addEventListener('click', testSimpleAPI);
+    header.appendChild(testBtn);
+    
     // Style pour le bouton déconnexion
     const style = document.createElement('style');
     style.textContent = `
@@ -79,6 +87,24 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Mise à jour du statut de connexion
     updateConnectionStatus();
+  }
+  
+  // Test simple de l'API
+  function testSimpleAPI() {
+    chrome.storage.local.get(['apiBaseUrl'], async (result) => {
+      const serverUrl = result.apiBaseUrl || 'http://fca-agent.letsq.xyz/api';
+      displayMessage('assistant', 'Test de connexion en cours...');
+      
+      try {
+        const response = await fetch(`${serverUrl}/tasks/hello`);
+        const text = await response.text();
+        console.log("Réponse simple:", text);
+        displayMessage('assistant', `Test de connexion réussi: "${text}"`);
+      } catch(error) {
+        console.error("Erreur test:", error);
+        displayMessage('assistant', `Erreur test: ${error.message}`);
+      }
+    });
   }
   
   // Vérification simple d'authentification
@@ -467,7 +493,7 @@ document.addEventListener('DOMContentLoaded', () => {
     );
   }
   
-  // Récupérer une réponse complète depuis le serveur
+  // Récupérer une réponse complète depuis le serveur (version simplifiée)
   async function fetchFullResponse(responseId) {
     try {
       // Récupérer l'URL de l'API
@@ -483,59 +509,31 @@ document.addEventListener('DOMContentLoaded', () => {
       
       apiBaseUrl = await getApiUrl();
       
-      console.log('====== DÉBUT DE LA RÉCUPÉRATION DE RÉPONSE ======');
-      console.log(`ID de réponse: ${responseId}`);
-      console.log(`URL complète: ${apiBaseUrl}/tasks/response/${responseId}`);
+      // Afficher l'URL complète dans la console pour le débogage
+      console.log("URL appelée:", `${apiBaseUrl}/tasks/response/${responseId}`);
       
-      // Utiliser XMLHttpRequest au lieu de fetch pour plus de contrôle et de débogage
-      return new Promise((resolve, reject) => {
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', `${apiBaseUrl}/tasks/response/${responseId}`, true);
-        xhr.setRequestHeader('Accept', 'text/plain');
-        
-        // Ajouter tous les écouteurs avant d'envoyer la requête
-        xhr.onload = function() {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            console.log(`Réponse reçue: Statut ${xhr.status}`);
-            console.log(`Type de contenu: ${xhr.getResponseHeader('Content-Type')}`);
-            console.log(`Longueur: ${xhr.responseText.length} caractères`);
-            console.log(`Début: ${xhr.responseText.substring(0, 100)}...`);
-            resolve(xhr.responseText);
-          } else {
-            console.error(`Erreur HTTP: ${xhr.status} - ${xhr.statusText}`);
-            reject(new Error(`Erreur HTTP: ${xhr.status}`));
-          }
-        };
-        
-        xhr.onerror = function() {
-          console.error('Erreur réseau lors de la récupération de la réponse');
-          reject(new Error('Erreur réseau lors de la récupération de la réponse'));
-        };
-        
-        xhr.ontimeout = function() {
-          console.error('Délai d\'attente dépassé lors de la récupération de la réponse');
-          reject(new Error('Délai d\'attente dépassé'));
-        };
-        
-        xhr.onreadystatechange = function() {
-          console.log(`État: ${xhr.readyState} - Statut: ${xhr.status}`);
-          if (xhr.readyState === 2) {
-            console.log(`Headers reçus: ${xhr.getAllResponseHeaders()}`);
-          }
-        };
-        
-        // Définir un timeout plus long pour les réponses volumineuses
-        xhr.timeout = 30000; // 30 secondes
-        
-        // Envoyer la requête
-        console.log('Envoi de la requête XHR...');
-        xhr.send();
+      // Utiliser fetch standard pour récupérer la réponse
+      const response = await fetch(`${apiBaseUrl}/tasks/response/${responseId}`, {
+        method: 'GET',
+        credentials: 'include'
       });
+      
+      console.log("Statut de la réponse:", response.status);
+      console.log("Headers:", response.headers);
+      
+      if (!response.ok) {
+        throw new Error(`Erreur HTTP: ${response.status}`);
+      }
+      
+      // Récupérer le contenu en texte brut
+      const textContent = await response.text();
+      console.log(`Réponse reçue: ${textContent.length} caractères`);
+      console.log(`Début de la réponse: ${textContent.substring(0, 100)}...`);
+      
+      return textContent;
     } catch (error) {
       console.error('Erreur lors de la récupération de la réponse complète:', error);
       throw error;
-    } finally {
-      console.log('====== FIN DE LA RÉCUPÉRATION DE RÉPONSE ======');
     }
   }
 
