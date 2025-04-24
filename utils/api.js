@@ -2,7 +2,7 @@
 // Fonctions utilitaires pour communiquer avec le serveur Raspberry Pi
 
 class ApiClient {
-  constructor(baseUrl = 'http://localhost:3001/api') {
+  constructor(baseUrl = 'http://fca-agent.letsq.xyz/api') {
     this.baseUrl = baseUrl;
     this.accessToken = null;
     this.refreshToken = null;
