@@ -169,7 +169,12 @@ document.addEventListener('DOMContentLoaded', () => {
               .catch(error => {
                 // Supprimer le message temporaire
                 removeMessage(tempMessageId);
-                displayMessage('assistant', `Erreur lors de la récupération de la réponse complète: ${error.message}`);
+                
+                // Afficher une erreur avec lien vers la page de secours
+                const errorMsg = `Erreur lors de la récupération de la réponse complète: ${error.message}<br><br>`;
+                const fallbackLink = `<a href="../fallback.html?responseId=${response.responseId}" target="_blank">Cliquez ici pour utiliser la méthode alternative</a>`;
+                
+                displayMessage('assistant', errorMsg + fallbackLink);
               });
           } else if (response.result && response.result.response) {
             displayMessage('assistant', response.result.response);
@@ -351,7 +356,12 @@ document.addEventListener('DOMContentLoaded', () => {
                         .catch(error => {
                           // Supprimer le message temporaire
                           removeMessage(tempMessageId);
-                          displayMessage('assistant', `Erreur lors de la récupération de la réponse complète: ${error.message}`);
+                          
+                          // Afficher une erreur avec lien vers la page de secours
+                          const errorMsg = `Erreur lors de la récupération de la réponse complète: ${error.message}<br><br>`;
+                          const fallbackLink = `<a href="../fallback.html?responseId=${response.responseId}" target="_blank">Cliquez ici pour utiliser la méthode alternative</a>`;
+                          
+                          displayMessage('assistant', errorMsg + fallbackLink);
                         });
                     } 
                     // Sinon, vérifier si nous avons une réponse normale dans result.response
@@ -437,7 +447,12 @@ document.addEventListener('DOMContentLoaded', () => {
               .catch(error => {
                 // Supprimer le message temporaire
                 removeMessage(tempMessageId);
-                displayMessage('assistant', `Erreur lors de la récupération de la réponse complète: ${error.message}`);
+                
+                // Afficher une erreur avec lien vers la page de secours
+                const errorMsg = `Erreur lors de la récupération de la réponse complète: ${error.message}<br><br>`;
+                const fallbackLink = `<a href="../fallback.html?responseId=${response.responseId}" target="_blank">Cliquez ici pour utiliser la méthode alternative</a>`;
+                
+                displayMessage('assistant', errorMsg + fallbackLink);
               });
           } else if (response.result && response.result.response) {
             displayMessage('assistant', response.result.response);
@@ -468,29 +483,59 @@ document.addEventListener('DOMContentLoaded', () => {
       
       apiBaseUrl = await getApiUrl();
       
-      // Appel à l'API pour récupérer la réponse complète
-      console.log(`Récupération de la réponse complète depuis ${apiBaseUrl}/tasks/response/${responseId}`);
+      console.log('====== DÉBUT DE LA RÉCUPÉRATION DE RÉPONSE ======');
+      console.log(`ID de réponse: ${responseId}`);
+      console.log(`URL complète: ${apiBaseUrl}/tasks/response/${responseId}`);
       
-      // Utiliser fetch en mode text pour éviter les problèmes de JSON
-      const response = await fetch(`${apiBaseUrl}/tasks/response/${responseId}`, {
-        method: 'GET',
-        headers: { 'Accept': 'text/plain' },
-        credentials: 'include'
+      // Utiliser XMLHttpRequest au lieu de fetch pour plus de contrôle et de débogage
+      return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', `${apiBaseUrl}/tasks/response/${responseId}`, true);
+        xhr.setRequestHeader('Accept', 'text/plain');
+        
+        // Ajouter tous les écouteurs avant d'envoyer la requête
+        xhr.onload = function() {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            console.log(`Réponse reçue: Statut ${xhr.status}`);
+            console.log(`Type de contenu: ${xhr.getResponseHeader('Content-Type')}`);
+            console.log(`Longueur: ${xhr.responseText.length} caractères`);
+            console.log(`Début: ${xhr.responseText.substring(0, 100)}...`);
+            resolve(xhr.responseText);
+          } else {
+            console.error(`Erreur HTTP: ${xhr.status} - ${xhr.statusText}`);
+            reject(new Error(`Erreur HTTP: ${xhr.status}`));
+          }
+        };
+        
+        xhr.onerror = function() {
+          console.error('Erreur réseau lors de la récupération de la réponse');
+          reject(new Error('Erreur réseau lors de la récupération de la réponse'));
+        };
+        
+        xhr.ontimeout = function() {
+          console.error('Délai d\'attente dépassé lors de la récupération de la réponse');
+          reject(new Error('Délai d\'attente dépassé'));
+        };
+        
+        xhr.onreadystatechange = function() {
+          console.log(`État: ${xhr.readyState} - Statut: ${xhr.status}`);
+          if (xhr.readyState === 2) {
+            console.log(`Headers reçus: ${xhr.getAllResponseHeaders()}`);
+          }
+        };
+        
+        // Définir un timeout plus long pour les réponses volumineuses
+        xhr.timeout = 30000; // 30 secondes
+        
+        // Envoyer la requête
+        console.log('Envoi de la requête XHR...');
+        xhr.send();
       });
-      
-      if (!response.ok) {
-        throw new Error(`Erreur HTTP: ${response.status}`);
-      }
-      
-      // Récupérer le contenu en texte brut
-      const textContent = await response.text();
-      console.log(`Réponse complète reçue: ${textContent.length} caractères`);
-      
-      // Retourner directement le texte brut
-      return textContent;
     } catch (error) {
       console.error('Erreur lors de la récupération de la réponse complète:', error);
       throw error;
+    } finally {
+      console.log('====== FIN DE LA RÉCUPÉRATION DE RÉPONSE ======');
     }
   }
 
