@@ -56,6 +56,16 @@ document.addEventListener('DOMContentLoaded', () => {
         background-color: #f0f0f0;
         color: #d9534f;
       }
+      
+      /* Style pour les conteneurs de messages avec défilement */
+      .message-text-container {
+        max-height: 300px;
+        overflow-y: auto;
+        padding: 10px;
+        border-radius: 5px;
+        background-color: #f9f9f9;
+        margin-top: 5px;
+      }
     `;
     document.head.appendChild(style);
     
@@ -137,7 +147,35 @@ document.addEventListener('DOMContentLoaded', () => {
         removeMessage(loadingMsgId);
         
         if (response && response.success) {
-          displayMessage('assistant', response.result.response);
+          // Vérifier si on a une référence à une réponse complète
+          if (response.responseId && response.fullResponseAvailable) {
+            // Afficher un message temporaire avec l'aperçu
+            const tempMessageId = displayMessage('assistant', 
+              `Chargement de la réponse complète...<br><br><em>Aperçu:</em> ${response.preview}`);
+            
+            // Récupérer la réponse complète depuis le serveur
+            fetchFullResponse(response.responseId)
+              .then(fullResponse => {
+                // Supprimer le message temporaire
+                removeMessage(tempMessageId);
+                
+                if (fullResponse) {
+                  // Afficher la réponse complète
+                  displayMessage('assistant', fullResponse);
+                } else {
+                  displayMessage('assistant', 'Désolé, impossible de récupérer la réponse complète.');
+                }
+              })
+              .catch(error => {
+                // Supprimer le message temporaire
+                removeMessage(tempMessageId);
+                displayMessage('assistant', `Erreur lors de la récupération de la réponse complète: ${error.message}`);
+              });
+          } else if (response.result && response.result.response) {
+            displayMessage('assistant', response.result.response);
+          } else {
+            displayMessage('assistant', 'Réponse reçue mais format inattendu.');
+          }
         } else {
           displayMessage('assistant', 'Désolé, je n\'ai pas pu traiter votre demande. ' + 
                                        (response?.error || 'Veuillez réessayer.'));
@@ -303,9 +341,9 @@ document.addEventListener('DOMContentLoaded', () => {
                           // Supprimer le message temporaire
                           removeMessage(tempMessageId);
                           
-                          if (fullResponse && fullResponse.response) {
+                          if (fullResponse) {
                             // Afficher la réponse complète
-                            displayMessage('assistant', fullResponse.response);
+                            displayMessage('assistant', fullResponse);
                           } else {
                             displayMessage('assistant', 'Désolé, impossible de récupérer la réponse complète.');
                           }
@@ -377,7 +415,35 @@ document.addEventListener('DOMContentLoaded', () => {
         removeMessage(loadingMsgId);
         
         if (response && response.success) {
-          displayMessage('assistant', response.result.response || 'Tâche exécutée avec succès.');
+          // Vérifier si on a une référence à une réponse complète
+          if (response.responseId && response.fullResponseAvailable) {
+            // Afficher un message temporaire avec l'aperçu
+            const tempMessageId = displayMessage('assistant', 
+              `Chargement de la réponse complète...<br><br><em>Aperçu:</em> ${response.preview}`);
+            
+            // Récupérer la réponse complète depuis le serveur
+            fetchFullResponse(response.responseId)
+              .then(fullResponse => {
+                // Supprimer le message temporaire
+                removeMessage(tempMessageId);
+                
+                if (fullResponse) {
+                  // Afficher la réponse complète
+                  displayMessage('assistant', fullResponse);
+                } else {
+                  displayMessage('assistant', 'Désolé, impossible de récupérer la réponse complète.');
+                }
+              })
+              .catch(error => {
+                // Supprimer le message temporaire
+                removeMessage(tempMessageId);
+                displayMessage('assistant', `Erreur lors de la récupération de la réponse complète: ${error.message}`);
+              });
+          } else if (response.result && response.result.response) {
+            displayMessage('assistant', response.result.response);
+          } else {
+            displayMessage('assistant', 'Tâche exécutée avec succès mais le format de la réponse est inattendu.');
+          }
         } else {
           displayMessage('assistant', 'Désolé, je n\'ai pas pu exécuter cette tâche. ' + 
                                        (response?.error || 'Veuillez réessayer.'));
@@ -405,9 +471,10 @@ document.addEventListener('DOMContentLoaded', () => {
       // Appel à l'API pour récupérer la réponse complète
       console.log(`Récupération de la réponse complète depuis ${apiBaseUrl}/tasks/response/${responseId}`);
       
+      // Utiliser fetch en mode text pour éviter les problèmes de JSON
       const response = await fetch(`${apiBaseUrl}/tasks/response/${responseId}`, {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Accept': 'text/plain' },
         credentials: 'include'
       });
       
@@ -415,7 +482,12 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error(`Erreur HTTP: ${response.status}`);
       }
       
-      return await response.json();
+      // Récupérer le contenu en texte brut
+      const textContent = await response.text();
+      console.log(`Réponse complète reçue: ${textContent.length} caractères`);
+      
+      // Retourner directement le texte brut
+      return textContent;
     } catch (error) {
       console.error('Erreur lors de la récupération de la réponse complète:', error);
       throw error;
@@ -438,37 +510,24 @@ document.addEventListener('DOMContentLoaded', () => {
     // Détecter si le texte contient du HTML
     const containsHTML = /<[a-z][\s\S]*>/i.test(text);
     
-    // Vérifier si le texte est trop long
-    if (text && text.length > 500) {
-      console.log(`Message long détecté (${text.length} caractères)`);
-      
-      // Créer un conteneur pour le texte avec défilement
-      const textContainer = document.createElement('div');
-      textContainer.className = 'message-text-container';
-      
-      // Gérer les retours à la ligne et le formattage
-      if (containsHTML) {
-        textContainer.innerHTML = text; // Si c'est du HTML (comme le spinner)
-      } else {
-        textContainer.innerHTML = text.replace(/\n/g, '<br>'); // Simple conversion des retours à la ligne
-      }
-      
-      // Ajouter le conteneur au message
-      messageElement.appendChild(textContainer);
+    // Créer un conteneur pour le texte avec défilement pour tous les messages
+    const textContainer = document.createElement('div');
+    textContainer.className = 'message-text-container';
+    
+    // Gérer les retours à la ligne et le formattage
+    if (containsHTML) {
+      textContainer.innerHTML = text; // Si c'est du HTML (comme le spinner)
     } else {
-      // Pour les messages courts
-      if (containsHTML) {
-        // Si c'est du HTML (comme le spinner)
-        const container = document.createElement('div');
-        container.innerHTML = text;
-        messageElement.appendChild(container);
-      } else {
-        // Texte normal
-        const textElement = document.createElement('p');
-        textElement.textContent = text;
-        messageElement.appendChild(textElement);
-      }
+      // Convertir les URL en liens cliquables
+      const linkedText = text.replace(
+        /(https?:\/\/[^\s]+)/g, 
+        '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>'
+      );
+      textContainer.innerHTML = linkedText.replace(/\n/g, '<br>');
     }
+    
+    // Ajouter le conteneur au message
+    messageElement.appendChild(textContainer);
     
     responseArea.appendChild(messageElement);
     
