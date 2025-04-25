@@ -1,7 +1,7 @@
 // FCA-Agent - Background Service Worker (version simplifiée et robuste)
 
 // Configuration et état
-let API_BASE_URL = 'http://fca-agent.letsq.xyz/api'; 
+let API_BASE_URL = 'https://fca-agent.letsq.xyz/api'; 
 let authToken = null;
 let isAuthenticated = false;
 
