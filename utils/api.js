@@ -1,5 +1,4 @@
 // FCA-Agent - Module API unifié
-// Consolidation des deux fichiers api.js précédents
 
 /**
  * Récupère l'URL de l'API depuis le background script

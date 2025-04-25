@@ -1,6 +1,6 @@
 // FCA-Agent - Module de tâches générales
 import { displayMessage, displayLoadingMessage, removeMessage, displayErrorMessage } from '../messaging.js';
-import { fetchFullResponse } from '../api.js';
+import { fetchFullResponse } from '../../utils/api.js';
 
 /**
  * Traite l'entrée utilisateur et envoie au background script
