@@ -28,6 +28,19 @@ function initializeApp() {
     const serverIndicator = document.getElementById('server-indicator');
     const quickTaskButtons = document.querySelectorAll('.task-btn');
     
+    console.log('DOM: Récupération des éléments DOM');
+    console.log('DOM authIndicator:', authIndicator);
+    console.log('DOM serverIndicator:', serverIndicator);
+    
+    // Vérifier si les indicateurs existent
+    if (!authIndicator) {
+      console.error("ERREUR: L'élément DOM 'auth-indicator' n'a pas été trouvé");
+    }
+    
+    if (!serverIndicator) {
+      console.error("ERREUR: L'élément DOM 'server-indicator' n'a pas été trouvé");
+    }
+    
     // Initialiser le module de messagerie
     initMessaging(responseArea);
     

@@ -144,13 +144,18 @@ async function handleCheckAuthentication(sendResponse) {
   try {
     // Réponse immédiate basée sur l'état local
     const authStatus = getAuthStatus();
+    console.log('handleCheckAuthentication: retourne', { authenticated: authStatus.isAuthenticated });
     sendResponse({ authenticated: authStatus.isAuthenticated });
     
     // Vérification optionnelle auprès du serveur en arrière-plan
     // (ne bloque pas la réponse)
-    checkAuthWithServer().catch(error => {
-      console.warn('Erreur lors de la vérification d\'authentification avec le serveur:', error);
-    });
+    checkAuthWithServer()
+      .then(serverAuthResult => {
+        console.log('Vérification serveur complétée:', serverAuthResult);
+      })
+      .catch(error => {
+        console.warn('Erreur lors de la vérification d\'authentification avec le serveur:', error);
+      });
   } catch (error) {
     console.error('Erreur lors de la vérification d\'authentification:', error);
     sendResponse({ authenticated: false, error: error.message });
@@ -170,6 +175,7 @@ async function handleCheckServerConnection(sendResponse) {
 async function handleCheckServerOnline(sendResponse) {
   try {
     const isOnline = await checkServerOnline();
+    console.log('handleCheckServerOnline: retourne', { isConnected: isOnline });
     sendResponse({ isConnected: isOnline });
   } catch (error) {
     console.error('Erreur lors de la vérification du serveur:', error);

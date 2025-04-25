@@ -23,11 +23,20 @@ export function setAuthenticated(status, token = null) {
     authToken = null;
   }
   
-  // Émet un événement pour notifier du changement de statut d'authentification
-  chrome.runtime.sendMessage({ 
-    action: 'authStatusChanged', 
-    status: { isAuthenticated, hasToken: !!authToken } 
-  });
+  // Envoi du message de manière sécurisée
+  try {
+    chrome.runtime.sendMessage({ 
+      action: 'authStatusChanged', 
+      status: { isAuthenticated, hasToken: !!authToken } 
+    }, () => {
+      // Ignorer toute erreur (comme "Receiving end does not exist")
+      if (chrome.runtime.lastError) {
+        console.log('Message authStatusChanged non délivré (normal au démarrage)');
+      }
+    });
+  } catch (error) {
+    console.log('Erreur lors de l\'envoi du statut d\'authentification (normal au démarrage)');
+  }
 }
 
 // Chargement initial de l'état d'authentification

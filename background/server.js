@@ -18,10 +18,19 @@ export function setServerStatus(status) {
   
   // Si changement de statut, notifier les composants
   if (previousStatus !== isServerConnected) {
-    chrome.runtime.sendMessage({ 
-      action: 'serverStatusChanged', 
-      status: { isConnected: isServerConnected } 
-    });
+    try {
+      chrome.runtime.sendMessage({ 
+        action: 'serverStatusChanged', 
+        status: { isConnected: isServerConnected } 
+      }, () => {
+        // Ignorer toute erreur (comme "Receiving end does not exist")
+        if (chrome.runtime.lastError) {
+          console.log('Message serverStatusChanged non délivré (normal au démarrage)');
+        }
+      });
+    } catch (error) {
+      console.log('Erreur lors de l\'envoi du statut du serveur (normal au démarrage)');
+    }
   }
 }
 
