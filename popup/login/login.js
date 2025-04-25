@@ -56,59 +56,61 @@ document.addEventListener('DOMContentLoaded', () => {
     const newUrl = serverUrlInput.value.trim();
     if (newUrl) {
       serverUrl = newUrl;
-      chrome.storage.local.set({ 'apiBaseUrl': newUrl }, updateStatus);
+      // Sauvegarder dans le stockage local et mettre à jour l'URL dans le background script
+      chrome.storage.local.set({ 'apiBaseUrl': newUrl }, () => {
+        chrome.runtime.sendMessage({ action: 'updateApiUrl', url: newUrl }, () => {
+          updateStatus();
+        });
+      });
       serverConfigPanel.style.display = 'none';
     }
   });
   
-  // Fonction simple de connexion
+  // Fonction de connexion utilisant le proxy dans le background script
   async function attemptLogin(password) {
     try {
-      console.log('Tentative de connexion au serveur:', serverUrl);
+      console.log('Tentative de connexion via le background script proxy');
       
-      // Vérifier si le chemin contient déjà /api ou non
-      const loginUrl = serverUrl.endsWith('/api') 
-        ? `${serverUrl}/auth/login`
-        : `${serverUrl}/api/auth/login`;
-      console.log('URL de connexion:', loginUrl);
+      // Désactiver le bouton pendant la connexion
+      loginButton.disabled = true;
+      loginButton.textContent = 'Connexion en cours...';
       
-      const response = await fetch(loginUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-        credentials: 'include',
-        mode: 'cors'
-      });
-      
-      const data = await response.json();
-      
-      // Réactiver le bouton
-      loginButton.disabled = false;
-      loginButton.textContent = 'Se connecter';
-      
-      if (response.ok) {
-        console.log('Connexion réussie');
-        
-        // Indiquer au background script que l'authentification a réussi
-        chrome.runtime.sendMessage({ 
-          action: 'authenticationUpdated', 
-          authenticated: true 
-        });
-        
-        // Afficher un message de succès avant la redirection
-        loginForm.innerHTML = `
-          <div style="text-align: center; color: #28a745; margin: 20px 0;">
-            <p>Connexion réussie !</p>
-            <button id="continue-btn" class="btn btn-primary">Continuer</button>
-          </div>
-        `;
-        
-        document.getElementById('continue-btn').addEventListener('click', () => {
-          window.location.href = '../popup.html';
-        });
-      } else {
-        showError(data.error || 'Erreur de connexion');
-      }
+      // Envoyer la requête au background script pour contourner CORS
+      chrome.runtime.sendMessage(
+        { action: 'proxyLogin', password: password },
+        function(response) {
+          // Réactiver le bouton
+          loginButton.disabled = false;
+          loginButton.textContent = 'Se connecter';
+          
+          console.log('Réponse reçue du proxy de connexion:', response);
+          
+          if (response && response.success) {
+            console.log('Connexion réussie via proxy');
+            
+            // Indiquer au background script que l'authentification a réussi
+            chrome.runtime.sendMessage({ 
+              action: 'authenticationUpdated', 
+              authenticated: true 
+            });
+            
+            // Afficher un message de succès avant la redirection
+            loginForm.innerHTML = `
+              <div style="text-align: center; color: #28a745; margin: 20px 0;">
+                <p>Connexion réussie !</p>
+                <button id="continue-btn" class="btn btn-primary">Continuer</button>
+              </div>
+            `;
+            
+            document.getElementById('continue-btn').addEventListener('click', () => {
+              window.location.href = '../popup.html';
+            });
+          } else {
+            const errorMsg = response && response.error ? response.error : 'Erreur de connexion';
+            showError(errorMsg);
+          }
+        }
+      );
     } catch (error) {
       console.error('Erreur de connexion:', error);
       loginButton.disabled = false;
@@ -124,29 +126,19 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   
   function updateStatus() {
-    // Vérifier le statut du serveur une seule fois
-    const statusUrl = serverUrl.endsWith('/api')
-      ? `${serverUrl}/status`
-      : `${serverUrl}/api/status`;
-    console.log('URL de vérification du statut:', statusUrl);
-    
-    fetch(statusUrl, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    })
-    .then(response => {
-      if (response.ok) {
+    // Utiliser le background script pour vérifier le statut
+    chrome.runtime.sendMessage({ action: 'getStatus' }, function(response) {
+      console.log('Statut du serveur via background script:', response);
+      
+      if (response && response.status === 'connected') {
         statusIndicator.classList.remove('status-disconnected');
         statusIndicator.classList.add('status-connected');
         statusIndicator.title = 'Connecté au serveur';
       } else {
-        throw new Error();
+        statusIndicator.classList.remove('status-connected');
+        statusIndicator.classList.add('status-disconnected');
+        statusIndicator.title = 'Déconnecté du serveur';
       }
-    })
-    .catch(error => {
-      statusIndicator.classList.remove('status-connected');
-      statusIndicator.classList.add('status-disconnected');
-      statusIndicator.title = 'Déconnecté du serveur';
     });
   }
 });

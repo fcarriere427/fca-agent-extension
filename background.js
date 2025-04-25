@@ -74,6 +74,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ url: API_BASE_URL });
     return true;
   }
+  
+  if (message.action === 'proxyLogin') {
+    // Fonction proxy pour contourner les problèmes CORS
+    login(message.password)
+      .then(result => sendResponse(result))
+      .catch(error => sendResponse({ success: false, error: error.message }));
+    return true;
+  }
 });
 
 // Vérifie la connexion au serveur - version simplifiée
@@ -215,3 +223,50 @@ chrome.runtime.onStartup.addListener(() => {
     }
   });
 });
+
+// Fonction de login - effectue la requête depuis le background script pour contourner CORS
+async function login(password) {
+  try {
+    console.log('Tentative de connexion au serveur via proxy:', API_BASE_URL);
+    
+    // Utilisation de XMLHttpRequest au lieu de fetch pour plus de contrôle
+    // sur les redirections et les cookies
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', `${API_BASE_URL}/auth/login`, true);
+      xhr.setRequestHeader('Content-Type', 'application/json');
+      xhr.withCredentials = true;
+      
+      xhr.onload = function() {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          console.log('Connexion réussie via proxy');
+          isAuthenticated = true;
+          try {
+            const data = JSON.parse(xhr.responseText);
+            resolve({ success: true, data });
+          } catch (e) {
+            resolve({ success: true, data: { message: 'Authentification réussie' } });
+          }
+        } else {
+          console.error('Erreur de connexion via proxy:', xhr.status);
+          let errorMsg = 'Erreur de connexion';
+          try {
+            const data = JSON.parse(xhr.responseText);
+            errorMsg = data.error || errorMsg;
+          } catch (e) {}
+          reject(new Error(errorMsg));
+        }
+      };
+      
+      xhr.onerror = function() {
+        console.error('Erreur réseau lors de la connexion via proxy');
+        reject(new Error('Erreur de connexion au serveur'));
+      };
+      
+      xhr.send(JSON.stringify({ password }));
+    });
+  } catch (error) {
+    console.error('Erreur de connexion via proxy:', error);
+    throw error;
+  }
+}
