@@ -37,6 +37,30 @@ export async function checkServerConnection() {
 }
 
 /**
+ * Vérifie l'état d'authentification actuel
+ * @returns {Promise<boolean>} État d'authentification
+ */
+export async function checkAuthentication() {
+  try {
+    const apiBaseUrl = await getApiBaseUrl();
+    const response = await fetch(`${apiBaseUrl}/auth/check`, { 
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      return data.authenticated === true;
+    }
+    return false;
+  } catch (error) {
+    console.error("Erreur lors de la vérification d'authentification:", error);
+    return false;
+  }
+}
+
+/**
  * Récupère une réponse complète depuis le serveur
  * @param {string} responseId - ID de la réponse à récupérer
  * @returns {Promise<string>} Réponse complète

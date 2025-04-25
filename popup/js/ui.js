@@ -101,31 +101,41 @@ export function setupUI() {
  * Met à jour l'indicateur de statut de connexion
  */
 export async function updateConnectionStatus() {
-  // Vérifier à la fois la connexion au serveur et l'authentification
+  // Vérifier d'abord l'authentification, puis la connexion serveur
   try {
     console.log('Vérification du statut de connexion et d\'authentification...');
     
-    // Utiliser le background script pour vérifier les deux états
-    // 1. Vérifier la connexion serveur
-    const serverConnected = await checkServerConnection();
-    console.log('Serveur connecté:', serverConnected);
+    // 1. Vérifier directement l'authentification via l'API
+    // Utilise la nouvelle fonction checkAuthentication qui cible /auth/check
+    const { checkAuthentication } = await import('../../utils/api.js');
+    const authResult = await checkAuthentication();
+    console.log('Utilisateur authentifié (via API):', authResult);
     
-    // 2. Vérifier l'authentification
-    const authResult = await new Promise(resolve => {
+    // 2. Vérifier la connexion serveur si l'authentification a échoué
+    let serverConnected = false;
+    if (!authResult) {
+      serverConnected = await checkServerConnection();
+      console.log('Serveur connecté:', serverConnected);
+    }
+    
+    // 3. Vérifier aussi via le background script (pour assurer la cohérence)
+    const backendAuthResult = await new Promise(resolve => {
       chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (response) => {
-        console.log('Réponse d\'authentification:', response);
+        console.log('Réponse d\'authentification (background):', response);
         resolve(response && response.authenticated);
       });
     });
-    console.log('Utilisateur authentifié:', authResult);
     
-    // Mettre à jour l'indicateur en fonction des deux résultats
-    if (serverConnected && authResult) {
-      // Connecté au serveur ET authentifié
+    // Si l'une des méthodes d'authentification réussit, considérer comme authentifié
+    const isAuthenticated = authResult || backendAuthResult;
+    
+    // Mettre à jour l'indicateur en donnant priorité à l'authentification
+    if (isAuthenticated) {
+      // Authentifié, qu'importe l'état du serveur
       statusIndicator.classList.remove('status-disconnected');
       statusIndicator.classList.add('status-connected');
       statusIndicator.title = 'Connecté et authentifié';
-    } else if (serverConnected && !authResult) {
+    } else if (serverConnected) {
       // Connecté au serveur mais non authentifié
       statusIndicator.classList.remove('status-connected');
       statusIndicator.classList.add('status-disconnected');
@@ -136,8 +146,35 @@ export async function updateConnectionStatus() {
       statusIndicator.classList.add('status-disconnected');
       statusIndicator.title = 'Déconnecté du serveur';
     }
+    
+    // Si authentifié, informer le background script (synchronisation)
+    if (isAuthenticated !== backendAuthResult) {
+      chrome.runtime.sendMessage({ 
+        action: 'authenticationUpdated', 
+        authenticated: isAuthenticated 
+      });
+    }
   } catch (error) {
     console.error('Erreur lors de la mise à jour du statut:', error);
+    
+    // Faire une dernière tentative de vérification avec le background script
+    try {
+      const lastCheck = await new Promise(resolve => {
+        chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (response) => {
+          resolve(response && response.authenticated);
+        });
+      });
+      
+      if (lastCheck) {
+        statusIndicator.classList.remove('status-disconnected');
+        statusIndicator.classList.add('status-connected');
+        statusIndicator.title = 'Connecté et authentifié';
+        return;
+      }
+    } catch (backupError) {
+      console.error('Erreur lors de la vérification de secours:', backupError);
+    }
+    
     statusIndicator.classList.remove('status-connected');
     statusIndicator.classList.add('status-disconnected');
     statusIndicator.title = 'Erreur de connexion';
