@@ -66,7 +66,13 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       console.log('Tentative de connexion au serveur:', serverUrl);
       
-      const response = await fetch(`${serverUrl}/auth/login`, {
+      // Vérifier si le chemin contient déjà /api ou non
+      const loginUrl = serverUrl.endsWith('/api') 
+        ? `${serverUrl}/auth/login`
+        : `${serverUrl}/api/auth/login`;
+      console.log('URL de connexion:', loginUrl);
+      
+      const response = await fetch(loginUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ password }),
@@ -119,7 +125,12 @@ document.addEventListener('DOMContentLoaded', () => {
   
   function updateStatus() {
     // Vérifier le statut du serveur une seule fois
-    fetch(`${serverUrl}/status`, {
+    const statusUrl = serverUrl.endsWith('/api')
+      ? `${serverUrl}/status`
+      : `${serverUrl}/api/status`;
+    console.log('URL de vérification du statut:', statusUrl);
+    
+    fetch(statusUrl, {
       method: 'GET',
       headers: { 'Content-Type': 'application/json' }
     })
