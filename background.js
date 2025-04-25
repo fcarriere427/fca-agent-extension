@@ -78,8 +78,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'proxyLogin') {
     // Fonction proxy pour contourner les problèmes CORS
     login(message.password)
-      .then(result => sendResponse(result))
-      .catch(error => sendResponse({ success: false, error: error.message }));
+      .then(result => {
+        console.log('Résultat du login via proxy:', result);
+        sendResponse(result);
+      })
+      .catch(error => {
+        console.error('Erreur lors du login via proxy:', error);
+        sendResponse({ 
+          success: false, 
+          error: error instanceof Error ? error.message : 'Erreur de connexion' 
+        });
+      });
     return true;
   }
 });
@@ -196,7 +205,7 @@ async function executeTask(taskType, taskData) {
   }
 }
 
-// Initialisation : récupérer l'URL de l'API depuis le stockage local
+// On s'assure de bien initialiser l'URL API au démarrage du service worker
 chrome.runtime.onInstalled.addListener(() => {
   console.log('FCA-Agent installé/mis à jour');
   
@@ -229,44 +238,37 @@ async function login(password) {
   try {
     console.log('Tentative de connexion au serveur via proxy:', API_BASE_URL);
     
-    // Utilisation de XMLHttpRequest au lieu de fetch pour plus de contrôle
-    // sur les redirections et les cookies
-    return new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', `${API_BASE_URL}/auth/login`, true);
-      xhr.setRequestHeader('Content-Type', 'application/json');
-      xhr.withCredentials = true;
-      
-      xhr.onload = function() {
-        if (xhr.status >= 200 && xhr.status < 300) {
-          console.log('Connexion réussie via proxy');
-          isAuthenticated = true;
-          try {
-            const data = JSON.parse(xhr.responseText);
-            resolve({ success: true, data });
-          } catch (e) {
-            resolve({ success: true, data: { message: 'Authentification réussie' } });
-          }
-        } else {
-          console.error('Erreur de connexion via proxy:', xhr.status);
-          let errorMsg = 'Erreur de connexion';
-          try {
-            const data = JSON.parse(xhr.responseText);
-            errorMsg = data.error || errorMsg;
-          } catch (e) {}
-          reject(new Error(errorMsg));
-        }
-      };
-      
-      xhr.onerror = function() {
-        console.error('Erreur réseau lors de la connexion via proxy');
-        reject(new Error('Erreur de connexion au serveur'));
-      };
-      
-      xhr.send(JSON.stringify({ password }));
+    // Utiliser fetch au lieu de XMLHttpRequest dans un service worker
+    const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+      credentials: 'include',
     });
+    
+    if (response.ok) {
+      console.log('Connexion réussie via proxy');
+      isAuthenticated = true;
+      
+      try {
+        const data = await response.json();
+        return { success: true, data };
+      } catch (e) {
+        return { success: true, data: { message: 'Authentification réussie' } };
+      }
+    } else {
+      console.error('Erreur de connexion via proxy:', response.status);
+      let errorMsg = 'Erreur de connexion';
+      
+      try {
+        const data = await response.json();
+        errorMsg = data.error || errorMsg;
+      } catch (e) {}
+      
+      return { success: false, error: errorMsg };
+    }
   } catch (error) {
     console.error('Erreur de connexion via proxy:', error);
-    throw error;
+    return { success: false, error: error.message || 'Erreur de connexion au serveur' };
   }
 }

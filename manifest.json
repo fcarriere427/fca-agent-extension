@@ -14,6 +14,7 @@
   ],
   "host_permissions": [
     "https://fca-agent.letsq.xyz/*",
+    "http://fca-agent.letsq.xyz/*",
     "https://mail.google.com/*"
   ],
   "background": {
