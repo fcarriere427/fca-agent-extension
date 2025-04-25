@@ -80,22 +80,67 @@ export function setupUI() {
   
   // Mise à jour du statut de connexion
   updateConnectionStatus();
+  
+  // Vérifier régulièrement le statut pour maintenir l'affichage à jour
+  // Utiliser un intervalle modeste (5 secondes) pour ne pas surcharger
+  const statusInterval = setInterval(updateConnectionStatus, 5000);
+  
+  // Nettoyer l'intervalle lorsque la fenêtre popup est fermée
+  window.addEventListener('unload', () => {
+    if (statusInterval) clearInterval(statusInterval);
+  });
+  
+  // Ajouter un gestionnaire de clic sur l'indicateur de statut pour forcer une mise à jour
+  statusIndicator.addEventListener('click', () => {
+    console.log('Mise à jour manuelle du statut...');
+    updateConnectionStatus();
+  });
 }
 
 /**
  * Met à jour l'indicateur de statut de connexion
  */
 export async function updateConnectionStatus() {
-  const isConnected = await checkServerConnection();
-  
-  if (isConnected) {
-    statusIndicator.classList.remove('status-disconnected');
-    statusIndicator.classList.add('status-connected');
-    statusIndicator.title = 'Connecté au serveur';
-  } else {
+  // Vérifier à la fois la connexion au serveur et l'authentification
+  try {
+    console.log('Vérification du statut de connexion et d\'authentification...');
+    
+    // Utiliser le background script pour vérifier les deux états
+    // 1. Vérifier la connexion serveur
+    const serverConnected = await checkServerConnection();
+    console.log('Serveur connecté:', serverConnected);
+    
+    // 2. Vérifier l'authentification
+    const authResult = await new Promise(resolve => {
+      chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (response) => {
+        console.log('Réponse d\'authentification:', response);
+        resolve(response && response.authenticated);
+      });
+    });
+    console.log('Utilisateur authentifié:', authResult);
+    
+    // Mettre à jour l'indicateur en fonction des deux résultats
+    if (serverConnected && authResult) {
+      // Connecté au serveur ET authentifié
+      statusIndicator.classList.remove('status-disconnected');
+      statusIndicator.classList.add('status-connected');
+      statusIndicator.title = 'Connecté et authentifié';
+    } else if (serverConnected && !authResult) {
+      // Connecté au serveur mais non authentifié
+      statusIndicator.classList.remove('status-connected');
+      statusIndicator.classList.add('status-disconnected');
+      statusIndicator.title = 'Connecté mais non authentifié';
+    } else {
+      // Non connecté au serveur
+      statusIndicator.classList.remove('status-connected');
+      statusIndicator.classList.add('status-disconnected');
+      statusIndicator.title = 'Déconnecté du serveur';
+    }
+  } catch (error) {
+    console.error('Erreur lors de la mise à jour du statut:', error);
     statusIndicator.classList.remove('status-connected');
     statusIndicator.classList.add('status-disconnected');
-    statusIndicator.title = 'Déconnecté du serveur';
+    statusIndicator.title = 'Erreur de connexion';
   }
 }
 
