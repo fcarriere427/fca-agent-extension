@@ -2,7 +2,7 @@
 
 import { getApiUrl, setApiUrl } from './config.js';
 import { getAuthStatus, loginToServer, logoutFromServer, checkAuthWithServer } from './auth.js';
-import { getServerStatus, checkServerOnline, executeTaskOnServer } from './server.js';
+import { getServerStatus, checkServerOnline, executeTaskOnServer, forceServerCheck } from './server.js';
 
 // Logger spécifique aux gestionnaires de messages
 function handlerLog(message, level = 'info') {
@@ -45,6 +45,10 @@ export function setupMessageHandlers() {
       
       case 'checkServerOnline':
         handleCheckServerOnline(sendResponse);
+        break;
+        
+      case 'forceServerCheck':
+        handleForceServerCheck(sendResponse);
         break;
         
       case 'executeTask':
@@ -150,6 +154,12 @@ async function handleLogin(password, sendResponse) {
   try {
     const loginResult = await loginToServer(password);
     handlerLog(`Résultat de la connexion: ${JSON.stringify(loginResult)}`);
+    
+    // Force une mise à jour du statut serveur après connexion réussie
+    if (loginResult.success) {
+      await forceServerCheck();
+    }
+    
     sendResponse(loginResult);
   } catch (error) {
     handlerLog(`Erreur lors de la connexion: ${error.message}`, 'error');
@@ -214,6 +224,19 @@ async function handleCheckServerOnline(sendResponse) {
     sendResponse({ isConnected: isOnline });
   } catch (error) {
     handlerLog(`Erreur lors de la vérification du serveur: ${error.message}`, 'error');
+    sendResponse({ isConnected: false, error: error.message });
+  }
+}
+
+async function handleForceServerCheck(sendResponse) {
+  handlerLog('handleForceServerCheck appelé');
+  
+  try {
+    const isOnline = await forceServerCheck();
+    handlerLog(`Force check: Serveur en ligne: ${isOnline}`);
+    sendResponse({ isConnected: isOnline, forced: true });
+  } catch (error) {
+    handlerLog(`Erreur lors de la vérification forcée: ${error.message}`, 'error');
     sendResponse({ isConnected: false, error: error.message });
   }
 }

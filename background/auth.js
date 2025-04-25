@@ -184,9 +184,17 @@ export async function checkAuthWithServer() {
     const response = await fetch(`${apiUrl}/auth/check`, {
       method: 'GET',
       credentials: 'include',
-      headers: getAuthHeaders()
+      headers: getAuthHeaders(),
+      cache: 'no-cache' // IMPORTANT: Ne pas utiliser le cache
     });
     
+    // Le serveur peut renvoyer 304 Not Modified si rien n'a changé
+    if (response.status === 304) {
+      authLog('Réponse 304 Not Modified - Aucun changement de statut');
+      return isAuthenticated; // On conserve l'état local actuel
+    }
+    
+    // Lecture du corps de la réponse pour les autres codes
     if (response.ok) {
       const data = await response.json();
       authLog(`Résultat du serveur: authenticated=${data.authenticated}`);

@@ -27,8 +27,8 @@ export function initStatusIndicators(authIndicatorElement, serverIndicatorElemen
   authIndicator = authIndicatorElement;
   serverIndicator = serverIndicatorElement;
   
-  // S'assurer que les indicateurs sont rouges par défaut
-  resetIndicators();
+  // Forcer une vérification immédiate
+  requestStatusUpdates();
   
   // Surveiller les messages de mise à jour des statuts
   chrome.runtime.onMessage.addListener((message) => {
@@ -43,12 +43,9 @@ export function initStatusIndicators(authIndicatorElement, serverIndicatorElemen
     }
   });
   
-  // Rafraîchir les statuts au démarrage
-  requestStatusUpdates();
-  
   // Ajouter des tooltips plus informatifs aux indicateurs
   if (authIndicator) {
-    authIndicator.title = "État d'authentification";
+    authIndicator.title = "État d'authentification (cliquer pour vérifier)";
     
     // Ajouter un gestionnaire de clic pour forcer une mise à jour
     authIndicator.addEventListener('click', () => {
@@ -69,7 +66,7 @@ export function initStatusIndicators(authIndicatorElement, serverIndicatorElemen
   }
   
   if (serverIndicator) {
-    serverIndicator.title = "État de connexion au serveur";
+    serverIndicator.title = "État de connexion au serveur (cliquer pour vérifier)";
     
     // Ajouter un gestionnaire de clic pour forcer une mise à jour
     serverIndicator.addEventListener('click', () => {
@@ -88,23 +85,12 @@ export function initStatusIndicators(authIndicatorElement, serverIndicatorElemen
       });
     });
   }
-}
-
-/**
- * Remet les indicateurs à l'état déconnecté par défaut
- */
-function resetIndicators() {
-  statusLog('Réinitialisation des indicateurs');
   
-  if (authIndicator) {
-    authIndicator.classList.remove('status-connected');
-    authIndicator.classList.add('status-disconnected');
-  }
-  
-  if (serverIndicator) {
-    serverIndicator.classList.remove('status-connected');
-    serverIndicator.classList.add('status-disconnected');
-  }
+  // Mettre en place une vérification périodique pour s'assurer que les indicateurs sont à jour
+  setInterval(() => {
+    statusLog('Vérification périodique des statuts');
+    requestStatusUpdates();
+  }, 10000); // Vérifier toutes les 10 secondes
 }
 
 /**
@@ -118,8 +104,9 @@ function updateAuthIndicator(status) {
   
   statusLog(`Mise à jour de l'indicateur d'authentification: ${JSON.stringify(status)}`);
   
-  // Méthode plus directe et fiable pour modifier les classes
+  // Méthode plus directe pour modifier les classes
   try {
+    // IMPORTANT: Reset complet des classes
     authIndicator.className = 'status-indicator';
     
     if (status && (status.isAuthenticated || status.authenticated)) {
@@ -131,6 +118,9 @@ function updateAuthIndicator(status) {
       authIndicator.title = "Non authentifié";
       statusLog('Indicateur d\'auth -> ROUGE');
     }
+    
+    // Vérifier que les styles sont appliqués
+    statusLog(`Classes finales: ${authIndicator.className}`);
   } catch (error) {
     statusLog(`Erreur lors de la modification des classes: ${error.message}`, 'error');
   }
@@ -147,8 +137,9 @@ function updateServerIndicator(status) {
   
   statusLog(`Mise à jour de l'indicateur de serveur: ${JSON.stringify(status)}`);
   
-  // Méthode plus directe et fiable pour modifier les classes
+  // Méthode plus directe pour modifier les classes
   try {
+    // IMPORTANT: Reset complet des classes
     serverIndicator.className = 'status-indicator';
     
     if (status && status.isConnected) {
@@ -160,6 +151,9 @@ function updateServerIndicator(status) {
       serverIndicator.title = "Serveur déconnecté";
       statusLog('Indicateur de serveur -> ROUGE');
     }
+    
+    // Vérifier que les styles sont appliqués
+    statusLog(`Classes finales: ${serverIndicator.className}`);
   } catch (error) {
     statusLog(`Erreur lors de la modification des classes: ${error.message}`, 'error');
   }
@@ -171,28 +165,31 @@ function updateServerIndicator(status) {
 function requestStatusUpdates() {
   statusLog('Demande de mise à jour des statuts');
   
-  // Demander l'état actuel d'authentification et de serveur en une seule requête
-  chrome.runtime.sendMessage({ action: 'getAuthAndServerStatus' }, (response) => {
+  // VÉRIFICATION COMPLÈTE DU SERVEUR D'ABORD
+  chrome.runtime.sendMessage({ action: 'checkServerOnline' }, (response) => {
     if (chrome.runtime.lastError) {
-      statusLog(`Erreur lors de la requête: ${chrome.runtime.lastError.message}`, 'error');
+      statusLog(`Erreur lors de la vérification du serveur: ${chrome.runtime.lastError.message}`, 'error');
       return;
     }
     
-    statusLog(`Réponse complète: ${JSON.stringify(response)}`);
-    
+    statusLog(`Statut serveur: ${JSON.stringify(response)}`);
+    // Mise à jour immédiate de l'indicateur
     if (response) {
-      // Mettre à jour les indicateurs avec les états actuels
-      if (response.auth) {
-        updateAuthIndicator(response.auth);
+      updateServerIndicator(response);
+    }
+    
+    // PUIS VÉRIFICATION DE L'AUTHENTIFICATION
+    chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (authResponse) => {
+      if (chrome.runtime.lastError) {
+        statusLog(`Erreur lors de la vérification d'auth: ${chrome.runtime.lastError.message}`, 'error');
+        return;
       }
       
-      if (response.server) {
-        updateServerIndicator(response.server);
+      statusLog(`Statut authentification: ${JSON.stringify(authResponse)}`);
+      // Mise à jour immédiate de l'indicateur
+      if (authResponse) {
+        updateAuthIndicator({ authenticated: authResponse.authenticated });
       }
-    }
+    });
   });
-  
-  // Ensuite, demander des vérifications fraîches qui déclencheront des mises à jour
-  chrome.runtime.sendMessage({ action: 'checkAuthentication' });
-  chrome.runtime.sendMessage({ action: 'checkServerOnline' });
 }

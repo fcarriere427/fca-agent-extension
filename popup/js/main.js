@@ -1,63 +1,67 @@
-// FCA-Agent - Point d'entrée principal
-import { checkAuthOnce } from './auth.js';
-import { initUI, setupUI } from './ui.js';
-import { initMessaging } from './messaging.js';
+// FCA-Agent - Script principal pour le popup
+
+import { checkAuthOnce, handleLogout } from './auth.js';
 import { initStatusIndicators } from './status.js';
+import { setupMessageHandlers } from './messaging.js';
+import { initUi } from './ui.js';
+import { setupTaskHandlers } from './tasks/task-handlers.js';
 
-// Vérification immédiate d'authentification avant toute initialisation
-chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (response) => {
-  if (!response || !response.authenticated) {
-    console.log('Vérification principale: non authentifié, redirection vers login');
-    window.location.href = 'login/login.html';
-    return;
+// Logger spécifique au script principal
+function mainLog(message, level = 'info') {
+  const prefix = '[UI:MAIN]';
+  switch(level) {
+    case 'error':
+      console.error(`${prefix} ${message}`);
+      break;
+    case 'warn':
+      console.warn(`${prefix} ${message}`);
+      break;
+    default:
+      console.log(`${prefix} ${message}`);
   }
-  
-  // Si authentifié, continuer avec l'initialisation normale
-  console.log('Authentification principale: OK, initialisation popup');
-  initializeApp();
-});
+}
 
-// Initialisation de l'application au chargement du DOM
-function initializeApp() {
-  document.addEventListener('DOMContentLoaded', () => {
-    // Récupérer les éléments DOM principaux
-    const userInput = document.getElementById('user-input');
-    const submitBtn = document.getElementById('submit-btn');
-    const responseArea = document.getElementById('response-area');
-    const authIndicator = document.getElementById('auth-indicator');
-    const serverIndicator = document.getElementById('server-indicator');
-    const quickTaskButtons = document.querySelectorAll('.task-btn');
+document.addEventListener('DOMContentLoaded', () => {
+  mainLog('Initialisation du popup UI...');
+  
+  // Référence aux éléments UI principaux
+  const logoutBtn = document.getElementById('logout-btn');
+  const authIndicator = document.getElementById('auth-indicator');
+  const serverIndicator = document.getElementById('server-indicator');
+  
+  // Vérification de l'authentification avant d'initialiser l'UI
+  checkAuthOnce(() => {
+    mainLog('Authentification principale: OK, initialisation popup');
     
-    console.log('DOM: Récupération des éléments DOM');
-    console.log('DOM authIndicator:', authIndicator);
-    console.log('DOM serverIndicator:', serverIndicator);
-    
-    // Vérifier si les indicateurs existent
-    if (!authIndicator) {
-      console.error("ERREUR: L'élément DOM 'auth-indicator' n'a pas été trouvé");
-    }
-    
-    if (!serverIndicator) {
-      console.error("ERREUR: L'élément DOM 'server-indicator' n'a pas été trouvé");
-    }
-    
-    // Initialiser le module de messagerie
-    initMessaging(responseArea);
-    
-    // Initialiser l'interface utilisateur
-    initUI({
-      userInput,
-      submitBtn,
-      quickTaskButtons
-    });
+    // Initialiser les gestionnaires de messages
+    setupMessageHandlers();
     
     // Initialiser les indicateurs de statut
-    initStatusIndicators(authIndicator, serverIndicator);
+    if (authIndicator && serverIndicator) {
+      initStatusIndicators(authIndicator, serverIndicator);
+      mainLog('Indicateurs de statut initialisés');
+    } else {
+      mainLog('Indicateurs de statut non trouvés dans le DOM', 'error');
+    }
     
-    // Vérifier si l'utilisateur est authentifié avant tout
-    checkAuthOnce(() => {
-      // Configurer l'interface après vérification d'authentification
-      setupUI();
-    });
+    // Initialiser l'interface utilisateur générale
+    initUi();
+    
+    // Initialiser les gestionnaires de tâches
+    setupTaskHandlers();
+    
+    // Gestionnaire pour le bouton de déconnexion
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', handleLogout);
+      mainLog('Gestionnaire de déconnexion initialisé');
+    } else {
+      mainLog('Bouton de déconnexion non trouvé dans le DOM', 'error');
+    }
+    
+    // FORCE: Vérifier à nouveau le statut du serveur après 1 seconde
+    setTimeout(() => {
+      mainLog('Vérification forcée du statut du serveur après 1s');
+      chrome.runtime.sendMessage({ action: 'checkServerOnline' });
+    }, 1000);
   });
-}
+});
