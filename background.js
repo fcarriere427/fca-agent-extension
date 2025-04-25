@@ -5,25 +5,7 @@ import { loadAuthState, getAuthStatus } from './background/auth.js';
 import { setupMessageHandlers } from './background/handlers.js';
 import { checkServerOnline, getServerStatus } from './background/server.js';
 
-// Fonction sécurisée pour envoyer des messages
-function sendMessageSafely(message) {
-  return new Promise((resolve) => {
-    try {
-      chrome.runtime.sendMessage(message, (response) => {
-        // Vérifier s'il y a eu une erreur
-        if (chrome.runtime.lastError) {
-          console.log(`Message non délivré: ${chrome.runtime.lastError.message}`);
-          resolve(null); // Résoudre avec null en cas d'erreur
-        } else {
-          resolve(response);
-        }
-      });
-    } catch (error) {
-      console.log('Erreur lors de l\'envoi du message:', error);
-      resolve(null);
-    }
-  });
-}
+// Nous n'utilisons plus l'envoi de messages automatique à l'initialisation
 
 // Fonctions d'initialisation séparées par domaine
 async function initializeConfig() {
@@ -62,30 +44,11 @@ async function initialize() {
   // Configuration des gestionnaires de messages
   setupMessageHandlers();
   
-  // Notification des états initiaux aux composants intéressés
-  notifyStatusToComponents();
-  
   console.log('Initialisation du service worker terminée');
 }
 
-// Fonction utilitaire pour notifier les composants de l'état actuel
-function notifyStatusToComponents() {
-  const authStatus = getAuthStatus();
-  const serverStatus = getServerStatus();
-  
-  console.log('Notification des états initiaux - Auth:', authStatus, 'Server:', serverStatus);
-  
-  // Utiliser la fonction sécurisée pour envoyer les messages
-  sendMessageSafely({ 
-    action: 'authStatusChanged', 
-    status: authStatus
-  });
-  
-  sendMessageSafely({ 
-    action: 'serverStatusChanged', 
-    status: serverStatus
-  });
-}
+// La fonction notifyStatusToComponents a été supprimée pour éviter les erreurs
+// Les composants demanderont l'état directement quand ils en auront besoin
 
 // Installation/mise à jour de l'extension
 chrome.runtime.onInstalled.addListener(async (details) => {
