@@ -4,7 +4,7 @@ import { loadInitialConfig, setDefaultConfig } from './background/config.js';
 import { loadAuthState, getAuthStatus, checkAuthWithServer } from './background/auth.js';
 import { setupMessageHandlers } from './background/handlers.js';
 import { checkServerOnline, getServerStatus, forceServerCheck } from './background/server.js';
-import logger from './util/logger.js';
+import logger from './utils/logger.js';
 
 // Fonctions d'initialisation séparées par domaine
 async function initializeConfig() {
