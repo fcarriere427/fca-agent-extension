@@ -5,6 +5,26 @@ import { loadAuthState, getAuthStatus } from './background/auth.js';
 import { setupMessageHandlers } from './background/handlers.js';
 import { checkServerOnline, getServerStatus } from './background/server.js';
 
+// Fonction sécurisée pour envoyer des messages
+function sendMessageSafely(message) {
+  return new Promise((resolve) => {
+    try {
+      chrome.runtime.sendMessage(message, (response) => {
+        // Vérifier s'il y a eu une erreur
+        if (chrome.runtime.lastError) {
+          console.log(`Message non délivré: ${chrome.runtime.lastError.message}`);
+          resolve(null); // Résoudre avec null en cas d'erreur
+        } else {
+          resolve(response);
+        }
+      });
+    } catch (error) {
+      console.log('Erreur lors de l\'envoi du message:', error);
+      resolve(null);
+    }
+  });
+}
+
 // Fonctions d'initialisation séparées par domaine
 async function initializeConfig() {
   console.log('Initialisation de la configuration...');
@@ -55,27 +75,16 @@ function notifyStatusToComponents() {
   
   console.log('Notification des états initiaux - Auth:', authStatus, 'Server:', serverStatus);
   
-  // Vérifier si des listeners existent avant d'envoyer des messages
-  try {
-    // Envoyer les messages de manière sécurisée pour éviter l'erreur "Receiving end does not exist"
-    chrome.runtime.sendMessage({ 
-      action: 'authStatusChanged', 
-      status: authStatus
-    }).catch(err => {
-      // Ignorer l'erreur "Receiving end does not exist"
-      console.log('Pas de destinataire pour le message authStatusChanged, normal au démarrage');
-    });
-    
-    chrome.runtime.sendMessage({ 
-      action: 'serverStatusChanged', 
-      status: serverStatus
-    }).catch(err => {
-      // Ignorer l'erreur "Receiving end does not exist"
-      console.log('Pas de destinataire pour le message serverStatusChanged, normal au démarrage');
-    });
-  } catch (error) {
-    console.log('Erreur lors de la notification des statuts, normal au démarrage:', error.message);
-  }
+  // Utiliser la fonction sécurisée pour envoyer les messages
+  sendMessageSafely({ 
+    action: 'authStatusChanged', 
+    status: authStatus
+  });
+  
+  sendMessageSafely({ 
+    action: 'serverStatusChanged', 
+    status: serverStatus
+  });
 }
 
 // Installation/mise à jour de l'extension
