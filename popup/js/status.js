@@ -27,41 +27,35 @@ export function initStatusIndicators(authIndicatorElement, serverIndicatorElemen
   authIndicator = authIndicatorElement;
   serverIndicator = serverIndicatorElement;
   
-  // Forcer une vérification immédiate
-  requestStatusUpdates();
+  // S'assurer que les indicateurs sont dans l'état "déconnecté" par défaut
+  resetIndicators();
   
-  // Surveiller les messages de mise à jour des statuts
+  // Mode proactif : vérification directe des statuts
+  updateServerIndicator();
+  updateAuthIndicator();
+  
+  // Surveiller les messages de mise à jour des statuts (mode réactif)
   chrome.runtime.onMessage.addListener((message) => {
     statusLog(`Message reçu: ${JSON.stringify(message)}`);
     
     if (message.action === 'authStatusChanged') {
       statusLog(`Mise à jour du statut d'authentification: ${JSON.stringify(message.status)}`);
-      updateAuthIndicator(message.status);
+      updateAuthIndicatorWithStatus(message.status);
     } else if (message.action === 'serverStatusChanged') {
       statusLog(`Mise à jour du statut de serveur: ${JSON.stringify(message.status)}`);
-      updateServerIndicator(message.status);
+      updateServerIndicatorWithStatus(message.status);
     }
   });
   
-  // Ajouter des tooltips plus informatifs aux indicateurs
+  // Ajouter des tooltips et gestionnaires de clic pour les indicateurs
   if (authIndicator) {
     authIndicator.title = "État d'authentification (cliquer pour vérifier)";
     
     // Ajouter un gestionnaire de clic pour forcer une mise à jour
-    authIndicator.addEventListener('click', () => {
+    authIndicator.addEventListener('click', (e) => {
+      e.stopPropagation();
       statusLog('Demande manuelle de mise à jour du statut d\'authentification');
-      
-      chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (response) => {
-        if (chrome.runtime.lastError) {
-          statusLog(`Erreur: ${chrome.runtime.lastError.message}`, 'error');
-          return;
-        }
-        
-        statusLog(`Réponse: ${JSON.stringify(response)}`);
-        if (response) {
-          updateAuthIndicator({ authenticated: response.authenticated });
-        }
-      });
+      updateAuthIndicator();
     });
   }
   
@@ -69,34 +63,59 @@ export function initStatusIndicators(authIndicatorElement, serverIndicatorElemen
     serverIndicator.title = "État de connexion au serveur (cliquer pour vérifier)";
     
     // Ajouter un gestionnaire de clic pour forcer une mise à jour
-    serverIndicator.addEventListener('click', () => {
+    serverIndicator.addEventListener('click', (e) => {
+      e.stopPropagation();
       statusLog('Demande manuelle de mise à jour du statut du serveur');
-      
-      chrome.runtime.sendMessage({ action: 'checkServerOnline' }, (response) => {
-        if (chrome.runtime.lastError) {
-          statusLog(`Erreur: ${chrome.runtime.lastError.message}`, 'error');
-          return;
-        }
-        
-        statusLog(`Réponse: ${JSON.stringify(response)}`);
-        if (response) {
-          updateServerIndicator(response);
-        }
-      });
+      updateServerIndicator();
     });
   }
   
-  // Mettre en place une vérification périodique pour s'assurer que les indicateurs sont à jour
-  setInterval(() => {
-    statusLog('Vérification périodique des statuts');
-    requestStatusUpdates();
-  }, 10000); // Vérifier toutes les 10 secondes
+  // Mettre en place une vérification périodique pour garantir des statuts à jour
+  setInterval(updateServerIndicator, 30000); // Vérifier le serveur toutes les 30 secondes
+  setInterval(updateAuthIndicator, 60000);   // Vérifier l'authentification toutes les 60 secondes
 }
 
 /**
- * Met à jour l'indicateur d'authentification
+ * Remet les indicateurs à l'état déconnecté par défaut
  */
-function updateAuthIndicator(status) {
+function resetIndicators() {
+  statusLog('Réinitialisation des indicateurs');
+  
+  if (authIndicator) {
+    authIndicator.className = 'status-indicator status-disconnected';
+  }
+  
+  if (serverIndicator) {
+    serverIndicator.className = 'status-indicator status-disconnected';
+  }
+}
+
+/**
+ * Met à jour l'indicateur d'authentification en interrogeant directement le background script
+ */
+function updateAuthIndicator() {
+  statusLog('Mise à jour directe de l\'indicateur d\'authentification');
+  
+  if (!authIndicator) {
+    statusLog('Indicateur d\'authentification non défini', 'error');
+    return;
+  }
+  
+  chrome.runtime.sendMessage({ action: 'getAuthStatus' }, (response) => {
+    if (chrome.runtime.lastError) {
+      statusLog(`Erreur: ${chrome.runtime.lastError.message}`, 'error');
+      return;
+    }
+    
+    statusLog(`Réponse directe: ${JSON.stringify(response)}`);
+    updateAuthIndicatorWithStatus(response);
+  });
+}
+
+/**
+ * Met à jour l'indicateur d'authentification avec un statut donné
+ */
+function updateAuthIndicatorWithStatus(status) {
   if (!authIndicator) {
     statusLog('Indicateur d\'authentification non défini', 'error');
     return;
@@ -104,7 +123,7 @@ function updateAuthIndicator(status) {
   
   statusLog(`Mise à jour de l'indicateur d'authentification: ${JSON.stringify(status)}`);
   
-  // Méthode plus directe pour modifier les classes
+  // Méthode plus fiable pour modifier les classes
   try {
     // IMPORTANT: Reset complet des classes
     authIndicator.className = 'status-indicator';
@@ -127,9 +146,31 @@ function updateAuthIndicator(status) {
 }
 
 /**
- * Met à jour l'indicateur de connexion au serveur
+ * Met à jour l'indicateur de serveur en interrogeant directement le background script
  */
-function updateServerIndicator(status) {
+function updateServerIndicator() {
+  statusLog('Mise à jour directe de l\'indicateur de serveur');
+  
+  if (!serverIndicator) {
+    statusLog('Indicateur de serveur non défini', 'error');
+    return;
+  }
+  
+  chrome.runtime.sendMessage({ action: 'getServerStatus' }, (response) => {
+    if (chrome.runtime.lastError) {
+      statusLog(`Erreur: ${chrome.runtime.lastError.message}`, 'error');
+      return;
+    }
+    
+    statusLog(`Réponse directe: ${JSON.stringify(response)}`);
+    updateServerIndicatorWithStatus(response);
+  });
+}
+
+/**
+ * Met à jour l'indicateur de serveur avec un statut donné
+ */
+function updateServerIndicatorWithStatus(status) {
   if (!serverIndicator) {
     statusLog('Indicateur de serveur non défini', 'error');
     return;
@@ -137,7 +178,7 @@ function updateServerIndicator(status) {
   
   statusLog(`Mise à jour de l'indicateur de serveur: ${JSON.stringify(status)}`);
   
-  // Méthode plus directe pour modifier les classes
+  // Méthode plus fiable pour modifier les classes
   try {
     // IMPORTANT: Reset complet des classes
     serverIndicator.className = 'status-indicator';
@@ -157,39 +198,4 @@ function updateServerIndicator(status) {
   } catch (error) {
     statusLog(`Erreur lors de la modification des classes: ${error.message}`, 'error');
   }
-}
-
-/**
- * Demande une mise à jour des statuts au background script
- */
-function requestStatusUpdates() {
-  statusLog('Demande de mise à jour des statuts');
-  
-  // VÉRIFICATION COMPLÈTE DU SERVEUR D'ABORD
-  chrome.runtime.sendMessage({ action: 'checkServerOnline' }, (response) => {
-    if (chrome.runtime.lastError) {
-      statusLog(`Erreur lors de la vérification du serveur: ${chrome.runtime.lastError.message}`, 'error');
-      return;
-    }
-    
-    statusLog(`Statut serveur: ${JSON.stringify(response)}`);
-    // Mise à jour immédiate de l'indicateur
-    if (response) {
-      updateServerIndicator(response);
-    }
-    
-    // PUIS VÉRIFICATION DE L'AUTHENTIFICATION
-    chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (authResponse) => {
-      if (chrome.runtime.lastError) {
-        statusLog(`Erreur lors de la vérification d'auth: ${chrome.runtime.lastError.message}`, 'error');
-        return;
-      }
-      
-      statusLog(`Statut authentification: ${JSON.stringify(authResponse)}`);
-      // Mise à jour immédiate de l'indicateur
-      if (authResponse) {
-        updateAuthIndicator({ authenticated: authResponse.authenticated });
-      }
-    });
-  });
 }

@@ -3,8 +3,8 @@
 import { checkAuthOnce, handleLogout } from './auth.js';
 import { initStatusIndicators } from './status.js';
 import { setupMessageHandlers } from './messaging.js';
-import { initUi } from './ui.js';
-import { setupTaskHandlers } from './tasks/task-handlers.js';
+import { initUI } from './ui.js';
+import { setupTaskHandlers } from './task-handlers.js';  // Chemin corrigé
 
 // Logger spécifique au script principal
 function mainLog(message, level = 'info') {
@@ -25,7 +25,6 @@ document.addEventListener('DOMContentLoaded', () => {
   mainLog('Initialisation du popup UI...');
   
   // Référence aux éléments UI principaux
-  const logoutBtn = document.getElementById('logout-btn');
   const authIndicator = document.getElementById('auth-indicator');
   const serverIndicator = document.getElementById('server-indicator');
   
@@ -45,17 +44,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     // Initialiser l'interface utilisateur générale
-    initUi();
+    initUI();
     
     // Initialiser les gestionnaires de tâches
     setupTaskHandlers();
     
-    // Gestionnaire pour le bouton de déconnexion
+    // Rechercher le bouton de déconnexion (s'il existe)
+    const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
       logoutBtn.addEventListener('click', handleLogout);
       mainLog('Gestionnaire de déconnexion initialisé');
     } else {
-      mainLog('Bouton de déconnexion non trouvé dans le DOM', 'error');
+      mainLog('Bouton de déconnexion non trouvé dans le DOM (normal s\'il n\'existe pas)', 'warn');
     }
     
     // FORCE: Vérifier à nouveau le statut du serveur après 1 seconde

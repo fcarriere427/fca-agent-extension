@@ -1,13 +1,6 @@
-/* Animations */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
+/* FCA-Agent - Styles pour le popup */
 
-.fade-in {
-  animation: fadeIn 0.3s ease-in;
-}/* FCA-Agent - Styles du popup */
-
+/* Reset et styles de base */
 * {
   margin: 0;
   padding: 0;
@@ -15,211 +8,176 @@
 }
 
 body {
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  width: 350px;
-  min-height: 400px;
-  background-color: #f5f6f7;
-  color: #333;
+  font-family: Arial, sans-serif;
+  font-size: 14px;
+  width: 400px;
+  max-height: 600px;
+  overflow-x: hidden;
+  background-color: #f8fafc;
+  color: #334155;
 }
 
 .container {
+  padding: 16px;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  padding: 12px;
+  gap: 16px;
 }
 
+/* Header */
 header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 15px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #ddd;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
 }
 
 h1 {
   font-size: 18px;
   font-weight: 600;
-  color: #2c5282;
+  color: #1e40af;
 }
 
-h2 {
-  font-size: 14px;
-  font-weight: 600;
-  margin-bottom: 8px;
-  color: #4a5568;
-}
-
+/* Indicateurs de statut - Intégration des styles d'urgence */
 .status-container {
   display: flex;
-  gap: 6px;
+  gap: 8px;
 }
 
 .status-indicator {
-  width: 16px;
-  height: 16px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.3s ease;
-  cursor: pointer;
-  position: relative;
-  background-color: #e53e3e;
-  color: white;
-  font-size: 10px;
   font-weight: bold;
+  font-size: 12px;
+  cursor: pointer;
+  transition: background-color 0.3s, transform 0.2s;
 }
 
+/* Ajout d'un effet hover pour montrer que les indicateurs sont cliquables */
 .status-indicator:hover {
-  transform: scale(1.2);
-  box-shadow: 0 0 4px rgba(0, 0, 0, 0.2);
+  transform: scale(1.1);
 }
 
-.status-indicator::after {
-  content: '';
-  position: absolute;
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  animation: pulse 2s infinite;
-  opacity: 0;
-}
-
-@keyframes pulse {
-  0% {
-    transform: scale(1);
-    opacity: 0.7;
-  }
-  70% {
-    transform: scale(1.5);
-    opacity: 0;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 0;
-  }
-}
-
+/* États des indicateurs avec !important pour garantir l'application */
 .status-connected {
-  background-color: #38a169;
-  color: white;
+  background-color: #38a169 !important; /* Vert */
+  color: white !important;
 }
 
 .status-disconnected {
-  background-color: #e53e3e;
-  color: white;
+  background-color: #e53e3e !important; /* Rouge */
+  color: white !important;
 }
 
-.input-container {
-  display: flex;
-  margin-bottom: 15px;
-}
-
-#user-input {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 20px 0 0 20px;
-  font-size: 14px;
-  outline: none;
-}
-
-#submit-btn {
-  background-color: #4299e1;
-  color: white;
-  border: none;
-  border-radius: 0 20px 20px 0;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-#submit-btn:hover {
-  background-color: #3182ce;
-}
-
+/* Conteneur des tâches rapides */
 .tasks-container {
-  margin-bottom: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .quick-tasks {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
 }
 
 .task-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 10px;
+  justify-content: center;
+  padding: 12px;
   background-color: white;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.2s;
-}
-
-.task-btn:hover {
-  background-color: #ebf8ff;
-  border-color: #bee3f8;
-}
-
-.task-icon {
-  font-size: 20px;
-  margin-bottom: 5px;
-}
-
-.task-label {
-  font-size: 12px;
+  height: 100px;
   text-align: center;
 }
 
+.task-btn:hover {
+  border-color: #cbd5e1;
+  background-color: #f8fafc;
+  transform: translateY(-2px);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+.task-icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.task-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #334155;
+}
+
+/* Zone de réponse */
 .response-container {
-  flex: 1;
-  padding: 12px;
   background-color: white;
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
-  max-height: 350px;
+  padding: 16px;
+  min-height: 100px;
+  max-height: 400px;
   overflow-y: auto;
-  font-size: 14px;
-  line-height: 1.4;
 }
 
 .welcome-message {
-  color: #718096;
+  color: #64748b;
   font-style: italic;
 }
 
+/* États de chargement et erreurs */
+.loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  color: #64748b;
+}
+
+.error-message {
+  color: #dc2626;
+  padding: 10px;
+  background-color: #fee2e2;
+  border-radius: 6px;
+  margin: 10px 0;
+}
+
+/* Styles spécifiques pour les messages dans la conversation */
 .message {
-  padding: 8px 12px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  padding: 8px;
   border-radius: 8px;
-  max-width: 100%;
-  word-wrap: break-word;
 }
 
 .message-user {
-  background-color: #e6f7ff;
+  background-color: #e2e8f0;
   align-self: flex-end;
 }
 
 .message-assistant {
-  background-color: #f0f0f0;
+  background-color: #f1f5f9;
   align-self: flex-start;
 }
 
-.message-text-container {
-  max-height: 300px;
-  overflow-y: auto;
-  white-space: pre-wrap;
-  line-height: 1.4;
-  padding: 5px;
-  font-size: 13px;
+/* Animation de chargement */
+@keyframes pulse {
+  0% { opacity: 0.6; }
+  50% { opacity: 1; }
+  100% { opacity: 0.6; }
 }
 
-.message p {
-  margin: 0;
+.loading-indicator {
+  animation: pulse 1.5s infinite;
+  display: inline-block;
 }
