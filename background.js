@@ -11,13 +11,13 @@ function BGLog(message, level = 'info') {
   const prefix = '[Background.js]';
   switch(level) {
     case 'error':
-      console.error(`${prefix} ${message}`);
+      console.error(`${new Date().toISOString()} ${prefix} ${message}`);
       break;
     case 'warn':
-      console.warn(`${prefix} ${message}`);
+      console.warn(`${new Date().toISOString()} ${prefix} ${message}`);
       break;
     default:
-      console.log(`${prefix} ${message}`);
+      console.log(`${new Date().toISOString()} ${prefix} ${message}`);
   }
 }
 
