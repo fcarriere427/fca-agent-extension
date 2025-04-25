@@ -27,6 +27,17 @@
     </div>
   </div>
   
+  <!-- Vérification immédiate d'authentification -->
+  <script>
+    // Protection supplémentaire pour s'assurer que l'utilisateur est authentifié
+    chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (response) => {
+      if (!response || !response.authenticated) {
+        console.log('Vérification inline: non authentifié, redirection vers login');
+        window.location.href = 'login/login.html';
+      }
+    });
+  </script>
+  
   <!-- Charger le point d'entrée principal en tant que module ES6 -->
   <script type="module" src="js/main.js"></script>
 </body>

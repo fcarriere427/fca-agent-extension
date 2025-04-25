@@ -33,6 +33,32 @@
     </div>
   </div>
   
+  <!-- Configuration et références additionnelles -->
+  <div id="server-config-panel" style="display: none;">
+    <div class="panel-title">Configuration du serveur</div>
+    <div class="form-group">
+      <label for="server-url">URL du serveur</label>
+      <input type="text" id="server-url">
+    </div>
+    <button id="save-server-config" class="btn btn-sm">Enregistrer</button>
+  </div>
+  
+  <!-- Bouton de configuration discret -->
+  <div class="settings-container">
+    <button id="server-config-btn" title="Configuration du serveur">⚙️</button>
+  </div>
+  
+  <!-- Vérification si l'utilisateur est déjà authentifié -->
+  <script>
+    // Vérifier immédiatement si l'utilisateur est déjà authentifié
+    chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (response) => {
+      if (response && response.authenticated) {
+        console.log('Déjà authentifié, redirection vers la page principale');
+        window.location.href = '../popup.html';
+      }
+    });
+  </script>
+  
   <script src="login.js"></script>
 </body>
 </html>

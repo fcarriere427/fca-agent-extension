@@ -43,8 +43,11 @@ document.addEventListener('DOMContentLoaded', () => {
     loginButton.disabled = true;
     loginButton.textContent = 'Connexion en cours...';
     
-    // Tenter la connexion
-    attemptLogin(password);
+    // Utilisation du background script pour la connexion
+    chrome.runtime.sendMessage(
+      { action: 'login', password: password },
+      handleLoginResponse
+    );
   });
   
   // Configuration du serveur
@@ -66,74 +69,32 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
   
-  // Nouvelle approche : on essaie une connexion directe en http, en évitant HTTPS et en ciblant directement l'IP si nécessaire
-  async function attemptLogin(password) {
-    try {
-      console.log('Tentative de connexion directe');
-      
-      // Désactiver le bouton pendant la connexion
-      loginButton.disabled = true;
-      loginButton.textContent = 'Connexion en cours...';
-      
-      // Version simplifiée - connexion directe au serveur en contournant le DNS
-      // On essaie d'abord une IP locale (si disponible)
-      let loginUrl = 'http://192.168.1.100:3001/api/auth/login';
-      
-      try {
-        // Essayer d'abord une connexion directe
-        const response = await fetch(loginUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password }),
-          credentials: 'include',
-          mode: 'cors'
-        });
-        
-        if (response.ok) {
-          handleLoginSuccess();
-          return;
-        } else {
-          // Si la première tentative échoue, on essaie avec l'URL standard
-          throw new Error('Première tentative échouée, essai avec URL standard');
-        }
-      } catch (firstError) {
-        console.log('Première tentative échouée, essai avec URL standard:', firstError);
-        
-        // Si la tentative directe échoue, on essaie l'URL régulière
-        loginUrl = serverUrl.includes('/api') 
-          ? `${serverUrl}/auth/login`
-          : `${serverUrl}/api/auth/login`;
-        
-        try {
-          const response = await fetch(loginUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ password }),
-            credentials: 'include',
-            mode: 'cors'
-          });
-          
-          const data = await response.json();
-          
-          if (response.ok) {
-            handleLoginSuccess();
-          } else {
-            showError(data.error || 'Erreur de connexion');
-          }
-        } catch (secondError) {
-          console.error('Deuxième tentative échouée:', secondError);
-          showError('Erreur de connexion au serveur');
-        }
+  // Gestion de la réponse de connexion
+  function handleLoginResponse(response) {
+    // Réactiver le bouton
+    loginButton.disabled = false;
+    loginButton.textContent = 'Se connecter';
+    
+    // Vérifier d'abord s'il y a eu une erreur de communication
+    if (chrome.runtime.lastError) {
+      console.error('Erreur de communication:', chrome.runtime.lastError);
+      showError('Erreur de communication avec le serveur');
+      return;
+    }
+    
+    console.log('Réponse de login reçue:', response);
+    
+    // Gérer la réponse
+    if (response && response.success) {
+      // Mode debug: accepter le mot de passe 'debug' pour les tests locaux
+      if (passwordInput.value === 'debug') {
+        console.log('Mode développement: authentification simulée');
       }
       
-      // Réactiver le bouton
-      loginButton.disabled = false;
-      loginButton.textContent = 'Se connecter';
-    } catch (error) {
-      console.error('Erreur globale de connexion:', error);
-      loginButton.disabled = false;
-      loginButton.textContent = 'Se connecter';
-      showError('Erreur de connexion au serveur');
+      handleLoginSuccess();
+    } else {
+      const errorMsg = response && response.error ? response.error : 'Erreur de connexion';
+      showError(errorMsg);
     }
   }
   
@@ -166,60 +127,40 @@ document.addEventListener('DOMContentLoaded', () => {
     loginError.style.display = 'block';
   }
   
-  // Vérification directe du statut du serveur sans passer par le background script
-  async function updateStatus() {
-    try {
-      // Essayer d'abord l'IP locale si disponible
-      let statusUrl = 'http://192.168.1.100:3001/api/status';
-      
-      try {
-        // Tentative avec IP directe
-        const response = await fetch(statusUrl, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-          mode: 'cors'
-        });
-        
-        if (response.ok) {
-          statusIndicator.classList.remove('status-disconnected');
-          statusIndicator.classList.add('status-connected');
-          statusIndicator.title = 'Connecté au serveur';
-          return;
-        }
-      } catch (firstError) {
-        console.log('Vérification du statut avec IP locale échouée:', firstError);
+  // Vérification du statut du serveur via le background script
+  function updateStatus() {
+    chrome.runtime.sendMessage({ action: 'getStatus' }, (response) => {
+      // Gérer les erreurs de communication
+      if (chrome.runtime.lastError) {
+        console.error('Erreur lors de la vérification du statut:', chrome.runtime.lastError);
+        statusIndicator.classList.remove('status-connected');
+        statusIndicator.classList.add('status-disconnected');
+        statusIndicator.title = 'Déconnecté du serveur';
+        return;
       }
       
-      // Seconde tentative avec l'URL normale
-      statusUrl = serverUrl.includes('/api') 
-        ? `${serverUrl}/status`
-        : `${serverUrl}/api/status`;
+      console.log('Réponse de statut reçue:', response);
+      
+      if (response && response.status === 'connected') {
+        statusIndicator.classList.remove('status-disconnected');
+        statusIndicator.classList.add('status-connected');
+        statusIndicator.title = 'Connecté au serveur';
         
-      try {
-        const response = await fetch(statusUrl, {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-          mode: 'cors'
+        // Vérifier aussi l'authentification après confirmation de connexion
+        chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (authResponse) => {
+          console.log('Statut d\'authentification:', authResponse);
+          // Si authentifié, rediriger vers la page principale
+          if (authResponse && authResponse.authenticated) {
+            console.log('Déjà authentifié, redirection vers popup');
+            // On peut rediriger directement ou attendre que l'utilisateur clique
+            // window.location.href = '../popup.html';
+          }
         });
-        
-        if (response.ok) {
-          statusIndicator.classList.remove('status-disconnected');
-          statusIndicator.classList.add('status-connected');
-          statusIndicator.title = 'Connecté au serveur';
-        } else {
-          throw new Error('Statut non-OK');
-        }
-      } catch (secondError) {
-        console.error('Vérification du statut échouée:', secondError);
+      } else {
         statusIndicator.classList.remove('status-connected');
         statusIndicator.classList.add('status-disconnected');
         statusIndicator.title = 'Déconnecté du serveur';
       }
-    } catch (error) {
-      console.error('Erreur globale de vérification du statut:', error);
-      statusIndicator.classList.remove('status-connected');
-      statusIndicator.classList.add('status-disconnected');
-      statusIndicator.title = 'Déconnecté du serveur';
-    }
+    });
   }
 });
