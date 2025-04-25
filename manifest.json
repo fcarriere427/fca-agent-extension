@@ -10,7 +10,8 @@
     "activeTab",
     "scripting",
     "storage",
-    "tabs"
+    "tabs", 
+    "downloads"
   ],
   "host_permissions": [
     "https://fca-agent.letsq.xyz/*",
@@ -21,6 +22,12 @@
     "service_worker": "background.js",
     "type": "module"
   },
+  "web_accessible_resources": [
+    {
+      "resources": ["logger.js", "background/config.js", "background/auth.js", "background/handlers.js", "background/server.js"],
+      "matches": ["<all_urls>"]
+    }
+  ],
   "content_scripts": [
     {
       "matches": [
