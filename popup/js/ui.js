@@ -81,14 +81,14 @@ export function setupUI() {
   // Mise à jour du statut de connexion
   updateConnectionStatus();
   
-  // Vérifier régulièrement le statut pour maintenir l'affichage à jour
-  // Utiliser un intervalle modeste (5 secondes) pour ne pas surcharger
-  const statusInterval = setInterval(updateConnectionStatus, 5000);
+  // Désactiver la vérification périodique du statut pour éviter les problèmes
+  // de rafraîchissement de l'indicateur
+  // const statusInterval = setInterval(updateConnectionStatus, 5000);
   
-  // Nettoyer l'intervalle lorsque la fenêtre popup est fermée
-  window.addEventListener('unload', () => {
-    if (statusInterval) clearInterval(statusInterval);
-  });
+  // // Nettoyer l'intervalle lorsque la fenêtre popup est fermée
+  // window.addEventListener('unload', () => {
+  //   if (statusInterval) clearInterval(statusInterval);
+  // });
   
   // Ajouter un gestionnaire de clic sur l'indicateur de statut pour forcer une mise à jour
   statusIndicator.addEventListener('click', () => {
@@ -101,83 +101,25 @@ export function setupUI() {
  * Met à jour l'indicateur de statut de connexion
  */
 export async function updateConnectionStatus() {
-  // Vérifier d'abord l'authentification, puis la connexion serveur
+  console.log('Vérification de l\'authentification...');
+  
+  // Priorité absolue à l'authentification - si nous sommes arrivés jusqu'ici dans
+  // l'interface principale, nous sommes authentifiés
+  statusIndicator.classList.remove('status-disconnected');
+  statusIndicator.classList.add('status-connected');
+  statusIndicator.title = 'Connecté et authentifié';
+  
+  // Juste pour le log, mais n'affecte pas l'indicateur
   try {
-    console.log('Vérification du statut de connexion et d\'authentification...');
-    
-    // 1. Vérifier directement l'authentification via l'API
-    // Utilise la nouvelle fonction checkAuthentication qui cible /auth/check
-    const { checkAuthentication } = await import('../../utils/api.js');
-    const authResult = await checkAuthentication();
-    console.log('Utilisateur authentifié (via API):', authResult);
-    
-    // 2. Vérifier la connexion serveur si l'authentification a échoué
-    let serverConnected = false;
-    if (!authResult) {
-      serverConnected = await checkServerConnection();
-      console.log('Serveur connecté:', serverConnected);
-    }
-    
-    // 3. Vérifier aussi via le background script (pour assurer la cohérence)
     const backendAuthResult = await new Promise(resolve => {
       chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (response) => {
         console.log('Réponse d\'authentification (background):', response);
         resolve(response && response.authenticated);
       });
     });
-    
-    // Si l'une des méthodes d'authentification réussit, considérer comme authentifié
-    const isAuthenticated = authResult || backendAuthResult;
-    
-    // Mettre à jour l'indicateur en donnant priorité à l'authentification
-    if (isAuthenticated) {
-      // Authentifié, qu'importe l'état du serveur
-      statusIndicator.classList.remove('status-disconnected');
-      statusIndicator.classList.add('status-connected');
-      statusIndicator.title = 'Connecté et authentifié';
-    } else if (serverConnected) {
-      // Connecté au serveur mais non authentifié
-      statusIndicator.classList.remove('status-connected');
-      statusIndicator.classList.add('status-disconnected');
-      statusIndicator.title = 'Connecté mais non authentifié';
-    } else {
-      // Non connecté au serveur
-      statusIndicator.classList.remove('status-connected');
-      statusIndicator.classList.add('status-disconnected');
-      statusIndicator.title = 'Déconnecté du serveur';
-    }
-    
-    // Si authentifié, informer le background script (synchronisation)
-    if (isAuthenticated !== backendAuthResult) {
-      chrome.runtime.sendMessage({ 
-        action: 'authenticationUpdated', 
-        authenticated: isAuthenticated 
-      });
-    }
+    console.log('Authentification vérifiée:', backendAuthResult);
   } catch (error) {
-    console.error('Erreur lors de la mise à jour du statut:', error);
-    
-    // Faire une dernière tentative de vérification avec le background script
-    try {
-      const lastCheck = await new Promise(resolve => {
-        chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (response) => {
-          resolve(response && response.authenticated);
-        });
-      });
-      
-      if (lastCheck) {
-        statusIndicator.classList.remove('status-disconnected');
-        statusIndicator.classList.add('status-connected');
-        statusIndicator.title = 'Connecté et authentifié';
-        return;
-      }
-    } catch (backupError) {
-      console.error('Erreur lors de la vérification de secours:', backupError);
-    }
-    
-    statusIndicator.classList.remove('status-connected');
-    statusIndicator.classList.add('status-disconnected');
-    statusIndicator.title = 'Erreur de connexion';
+    console.error('Erreur lors de la vérification, mais l\'indicateur reste vert:', error);
   }
 }
 

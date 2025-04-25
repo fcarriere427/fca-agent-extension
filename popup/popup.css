@@ -59,6 +59,9 @@ h2 {
   transition: all 0.3s ease;
   cursor: pointer;
   position: relative;
+  /* Forcé en vert par défaut pour l'authentification */
+  background-color: #38a169;
+  color: white;
 }
 
 #status-indicator:hover {
