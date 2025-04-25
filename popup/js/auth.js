@@ -1,25 +1,44 @@
 // FCA-Agent - Module d'authentification
 
+// Logger spécifique à l'authentification UI
+function authUiLog(message, level = 'info') {
+  const prefix = '[UI:AUTH]';
+  switch(level) {
+    case 'error':
+      console.error(`${prefix} ${message}`);
+      break;
+    case 'warn':
+      console.warn(`${prefix} ${message}`);
+      break;
+    default:
+      console.log(`${prefix} ${message}`);
+  }
+}
+
 /**
  * Vérifie que l'utilisateur est authentifié
  * @param {Function} callback - Fonction à exécuter si authentifié
  */
 export function checkAuthOnce(callback) {
+  authUiLog('Vérification du statut d\'authentification');
+  
   chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (response) => {
     // Vérifier d'abord s'il y a eu une erreur de communication
     if (chrome.runtime.lastError) {
-      console.error('Erreur de communication avec le background script:', chrome.runtime.lastError);
+      authUiLog(`Erreur de communication: ${chrome.runtime.lastError.message}`, 'error');
       window.location.href = 'login/login.html';
       return;
     }
+    
+    authUiLog(`Réponse: ${JSON.stringify(response)}`);
     
     if (!response || !response.authenticated) {
-      console.log('Non authentifié, redirection vers login');
+      authUiLog('Non authentifié, redirection vers login');
       window.location.href = 'login/login.html';
       return;
     }
     
-    console.log('Authentification OK');
+    authUiLog('Authentification OK');
     if (callback) callback();
   });
 }
@@ -28,20 +47,25 @@ export function checkAuthOnce(callback) {
  * Gère la déconnexion de l'utilisateur
  */
 export function handleLogout() {
+  authUiLog('Tentative de déconnexion');
+  
   chrome.runtime.sendMessage({ action: 'logout' }, (response) => {
     // Gérer les erreurs de communication
     if (chrome.runtime.lastError) {
-      console.error('Erreur lors de la déconnexion:', chrome.runtime.lastError);
+      authUiLog(`Erreur lors de la déconnexion: ${chrome.runtime.lastError.message}`, 'error');
       // Rediriger quand même pour éviter les problèmes d'authentification
       window.location.href = 'login/login.html';
       return;
     }
     
+    authUiLog(`Réponse: ${JSON.stringify(response)}`);
+    
     if (response && response.success) {
+      authUiLog('Déconnexion réussie, redirection vers login');
       // Rediriger vers la page de connexion
       window.location.href = 'login/login.html';
     } else {
-      console.error('Erreur lors de la déconnexion:', response ? response.error : 'Aucune réponse');
+      authUiLog(`Erreur lors de la déconnexion: ${response ? response.error : 'Aucune réponse'}`, 'error');
       // Rediriger quand même pour éviter les problèmes d'authentification
       window.location.href = 'login/login.html';
     }

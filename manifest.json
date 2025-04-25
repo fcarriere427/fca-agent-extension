@@ -28,12 +28,6 @@
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
-    },
-    {
-      "matches": [
-        "https://outlook.office.com/*"
-      ],
-      "js": ["content.js"]
     }
   ]
 }

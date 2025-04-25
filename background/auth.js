@@ -2,55 +2,93 @@
 
 import { getApiUrl } from './config.js';
 
-// État d'authentification
+// État d'authentification - explicitement marqué comme local
 let authToken = null;
 let isAuthenticated = false;
 
+// Logger spécifique à l'authentification
+function authLog(message, level = 'info') {
+  const prefix = '[EXT:AUTH]';
+  switch(level) {
+    case 'error':
+      console.error(`${prefix} ${message}`);
+      break;
+    case 'warn':
+      console.warn(`${prefix} ${message}`);
+      break;
+    default:
+      console.log(`${prefix} ${message}`);
+  }
+}
+
 // Méthodes d'accès
 export function getAuthStatus() {
+  authLog(`getAuthStatus() => isAuthenticated=${isAuthenticated}, hasToken=${!!authToken}`);
   return { isAuthenticated, hasToken: !!authToken };
 }
 
 export function setAuthenticated(status, token = null) {
-  isAuthenticated = status;
-  authToken = token;
+  authLog(`setAuthenticated(${status}, ${token ? 'token présent' : 'pas de token'})`);
   
-  // Mise à jour du stockage local
-  if (isAuthenticated && token) {
-    chrome.storage.local.set({ 'authToken': token });
-  } else if (!isAuthenticated) {
-    chrome.storage.local.remove('authToken');
+  isAuthenticated = status;
+  
+  // Mettre à jour le token seulement si un nouveau est fourni ou si on déconnecte
+  if (status && token) {
+    authToken = token;
+    // Stockage local seulement si authentifié avec un token
+    chrome.storage.local.set({ 'authToken': token }, () => {
+      authLog('Token enregistré dans le stockage local');
+    });
+  } else if (!status) {
+    // Si déconnecté, effacer le token
     authToken = null;
+    chrome.storage.local.remove('authToken', () => {
+      authLog('Token supprimé du stockage local');
+    });
   }
   
-  // Envoi du message de manière sécurisée
+  // Notifier autres composants (popup, etc.)
+  broadcastAuthStatus();
+}
+
+// Méthode dédiée pour diffuser le statut d'authentification
+function broadcastAuthStatus() {
+  const status = { isAuthenticated, hasToken: !!authToken };
+  authLog(`Diffusion du statut d'authentification: ${JSON.stringify(status)}`);
+  
   try {
     chrome.runtime.sendMessage({ 
       action: 'authStatusChanged', 
-      status: { isAuthenticated, hasToken: !!authToken } 
+      status: status 
     }, () => {
-      // Ignorer toute erreur (comme "Receiving end does not exist")
       if (chrome.runtime.lastError) {
-        console.log('Message authStatusChanged non délivré (normal au démarrage)');
+        authLog('Message authStatusChanged non délivré (normal au démarrage)', 'warn');
       }
     });
   } catch (error) {
-    console.log('Erreur lors de l\'envoi du statut d\'authentification (normal au démarrage)');
+    authLog(`Erreur lors de la diffusion du statut: ${error.message}`, 'error');
   }
 }
 
-// Chargement initial de l'état d'authentification
+// Chargement explicite du stockage local
 export function loadAuthState() {
+  authLog('Chargement du statut d\'authentification depuis le stockage local...');
+  
   return new Promise((resolve) => {
     chrome.storage.local.get(['authToken'], (result) => {
       if (result.authToken) {
         authToken = result.authToken;
         isAuthenticated = true;
-        console.log('Session authentifiée chargée depuis le stockage local');
+        authLog(`Session authentifiée chargée: token=${result.authToken.substring(0, 10)}...`);
       } else {
         isAuthenticated = false;
         authToken = null;
+        authLog('Aucune session authentifiée trouvée dans le stockage local');
       }
+      
+      // Annoncer le statut d'authentification au démarrage
+      broadcastAuthStatus();
+      
       resolve({ isAuthenticated, hasToken: !!authToken });
     });
   });
@@ -59,108 +97,128 @@ export function loadAuthState() {
 // Méthodes d'interaction avec l'API pour l'authentification
 export async function loginToServer(password) {
   const apiUrl = getApiUrl();
+  authLog(`Tentative de connexion à ${apiUrl}/auth/login`);
   
   try {
-    // Tenter une connexion avec différentes approches - première tentative
+    const response = await fetch(`${apiUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+      credentials: 'include'
+    });
+    
+    // Lecture du corps de la réponse
+    let responseData;
     try {
-      const response = await fetch(`${apiUrl}/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password }),
-        credentials: 'include'
-      });
-      
-      // Si succès, on retourne le résultat
-      if (response.ok) {
-        const data = await response.json();
-        // Mise à jour de l'état d'authentification
-        setAuthenticated(true, data.token || 'server_auth_' + Date.now());
-        return { 
-          success: true, 
-          token: authToken
-        };
-      }
-      
-      // Si échec mais réponse reçue, on tente d'extraire le message d'erreur
-      try {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Erreur d\'authentification');
-      } catch (jsonError) {
-        throw new Error(`Erreur ${response.status}: ${response.statusText}`);
-      }
-    } catch (networkError) {
-      // On peut tenter une autre approche si la première échoue
-      console.warn('Première tentative de connexion échouée, tentative alternative');
-      
-      // Mode développement/debug : si mot de passe spécial "debug", on simule une connexion réussie
-      if (password === 'debug') {
-        console.log('Mode debug activé, simulation de connexion réussie');
-        const debugToken = 'debug_auth_' + Date.now();
-        setAuthenticated(true, debugToken);
-        return { success: true, token: debugToken };
-      }
-      
-      // Sinon, on renvoie l'erreur
-      throw networkError;
+      responseData = await response.json();
+    } catch (jsonError) {
+      authLog(`Erreur lors du parsing de la réponse: ${jsonError.message}`, 'error');
+      responseData = {};
     }
-  } catch (error) {
-    console.error('Erreur globale de connexion:', error);
-    setAuthenticated(false);
-    return { success: false, error: error.message || 'Erreur de connexion au serveur' };
+    
+    authLog(`Réponse du serveur: status=${response.status}, data=${JSON.stringify(responseData)}`);
+    
+    // Si succès, mettre à jour l'état d'authentification
+    if (response.ok) {
+      // Utiliser le token fourni par le serveur ou générer un identifiant local
+      const token = responseData.token || `local_auth_${Date.now()}`;
+      setAuthenticated(true, token);
+      return { success: true, token };
+    } else {
+      // Échec d'authentification
+      authLog(`Échec d'authentification: ${responseData.error || response.statusText}`, 'error');
+      setAuthenticated(false);
+      return { 
+        success: false, 
+        error: responseData.error || `Erreur ${response.status}: ${response.statusText}` 
+      };
+    }
+  } catch (networkError) {
+    // Gestion du mode debug (pour tests locaux uniquement)
+    if (password === 'debug') {
+      authLog('Mode debug activé: simulation de connexion réussie', 'warn');
+      const debugToken = `debug_auth_${Date.now()}`;
+      setAuthenticated(true, debugToken);
+      return { success: true, token: debugToken };
+    }
+    
+    // Erreur réseau
+    authLog(`Erreur réseau: ${networkError.message}`, 'error');
+    return { success: false, error: `Erreur de connexion: ${networkError.message}` };
   }
 }
 
 export async function logoutFromServer() {
   const apiUrl = getApiUrl();
+  authLog(`Tentative de déconnexion à ${apiUrl}/auth/logout`);
   
-  // Simple appel au serveur pour la déconnexion
   try {
+    // D'abord, mise à jour locale pour assurer la déconnexion même si le serveur échoue
+    setAuthenticated(false);
+    
+    // Puis, notification au serveur
     const response = await fetch(`${apiUrl}/auth/logout`, {
       method: 'POST',
       credentials: 'include'
     });
     
-    // Mise à jour de l'état d'authentification (qu'importe le résultat de la requête)
-    setAuthenticated(false);
+    if (response.ok) {
+      authLog('Déconnexion serveur réussie');
+    } else {
+      authLog(`Déconnexion serveur avec statut ${response.status}`, 'warn');
+    }
     
-    return response.ok;
+    return true; // On considère toujours la déconnexion comme réussie côté client
   } catch (error) {
-    console.error('Erreur lors de la déconnexion du serveur:', error);
-    // Mise à jour de l'état d'authentification malgré l'erreur
-    setAuthenticated(false);
-    throw error;
+    authLog(`Erreur lors de la déconnexion du serveur: ${error.message}`, 'error');
+    // On a déjà mis à jour l'état local, donc on considère comme réussi
+    return true;
   }
 }
 
 export async function checkAuthWithServer() {
   const apiUrl = getApiUrl();
+  authLog(`Vérification d'authentification avec le serveur: ${apiUrl}/auth/check`);
   
   try {
     const response = await fetch(`${apiUrl}/auth/check`, {
       method: 'GET',
-      credentials: 'include'
+      credentials: 'include',
+      headers: getAuthHeaders()
     });
     
     if (response.ok) {
       const data = await response.json();
-      // Mise à jour de l'état local si différent du serveur
+      authLog(`Résultat du serveur: authenticated=${data.authenticated}`);
+      
+      // Mise à jour du statut local si différent
       if (data.authenticated !== isAuthenticated) {
-        setAuthenticated(data.authenticated, data.authenticated ? (authToken || 'server_validated_' + Date.now()) : null);
+        authLog(`Mise à jour du statut local: ${isAuthenticated} -> ${data.authenticated}`);
+        setAuthenticated(data.authenticated, data.authenticated ? (authToken || `server_validated_${Date.now()}`) : null);
       }
+      
       return data.authenticated;
+    } else {
+      authLog(`Vérification échouée: statut ${response.status}`, 'warn');
+      // On considère comme non authentifié si erreur
+      if (isAuthenticated) {
+        setAuthenticated(false);
+      }
+      return false;
     }
-    
-    // Si serveur répond mais pas OK, on considère non authentifié
-    setAuthenticated(false);
-    return false;
   } catch (error) {
-    console.error('Erreur lors de la vérification avec le serveur:', error);
-    // En cas d'erreur de connexion, on garde l'état local mais on le signale
+    authLog(`Erreur lors de la vérification avec le serveur: ${error.message}`, 'error');
+    // En cas d'erreur de connexion, on garde l'état local inchangé
     return { error: true, authenticated: isAuthenticated };
   }
 }
 
 // Fournit le token pour les requêtes API
 export function getAuthHeaders() {
-  return authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
+  if (!authToken) {
+    return {};
+  }
+  
+  authLog('Génération des headers d\'authentification');
+  return { 'Authorization': `Bearer ${authToken}` };
 }

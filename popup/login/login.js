@@ -1,23 +1,44 @@
 // FCA-Agent - Script de la page de connexion (version simplifiée et robuste)
 
+// Logger spécifique à la page de login
+function loginLog(message, level = 'info') {
+  const prefix = '[UI:LOGIN]';
+  switch(level) {
+    case 'error':
+      console.error(`${prefix} ${message}`);
+      break;
+    case 'warn':
+      console.warn(`${prefix} ${message}`);
+      break;
+    default:
+      console.log(`${prefix} ${message}`);
+  }
+}
+
 // Vérification immédiate si l'utilisateur est déjà authentifié
+loginLog('Vérification du statut d\'authentification au chargement');
+
 chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (response) => {
   // Gérer les erreurs de communication
   if (chrome.runtime.lastError) {
-    console.error('Erreur lors de la vérification d\'authentification:', chrome.runtime.lastError);
+    loginLog(`Erreur de communication: ${chrome.runtime.lastError.message}`, 'error');
     return; // Rester sur la page de login en cas d'erreur
   }
   
+  loginLog(`Réponse de vérification: ${JSON.stringify(response)}`);
+  
   if (response && response.authenticated) {
-    console.log('Déjà authentifié, redirection vers la page principale');
+    loginLog('Déjà authentifié, redirection vers la page principale');
     window.location.href = '../popup.html';
     return;
   }
   
-  console.log('Non authentifié, affichage de la page de login');
+  loginLog('Non authentifié, affichage de la page de login');
 });
 
 document.addEventListener('DOMContentLoaded', () => {
+  loginLog('Initialisation de la page de login');
+  
   // Éléments DOM
   const loginForm = document.getElementById('login-form');
   const loginButton = document.querySelector('.btn-primary');
@@ -30,20 +51,40 @@ document.addEventListener('DOMContentLoaded', () => {
   const loginError = document.getElementById('login-error');
   
   // Récupérer l'URL du serveur au démarrage
-  let serverUrl = '';
+  loginLog('Récupération de l\'URL du serveur depuis le stockage local');
+  
   chrome.storage.local.get(['apiBaseUrl'], (result) => {
+    if (chrome.runtime.lastError) {
+      loginLog(`Erreur lors de la récupération de l'URL: ${chrome.runtime.lastError.message}`, 'error');
+    }
+    
+    let serverUrl = '';
     if (result.apiBaseUrl) {
       serverUrl = result.apiBaseUrl;
-      serverUrlInput.value = serverUrl;
+      loginLog(`URL du serveur trouvée: ${serverUrl}`);
     } else {
       // Valeur par défaut
       serverUrl = 'http://fca-agent.letsq.xyz/api';
-      serverUrlInput.value = serverUrl;
-      chrome.storage.local.set({ 'apiBaseUrl': serverUrl });
+      loginLog(`Aucune URL trouvée, utilisation de la valeur par défaut: ${serverUrl}`, 'warn');
+      
+      // Sauvegarder la valeur par défaut
+      chrome.storage.local.set({ 'apiBaseUrl': serverUrl }, () => {
+        loginLog('URL par défaut enregistrée dans le stockage local');
+      });
     }
     
-    // Définir le statut de connexion
-    updateStatus();
+    // Mettre à jour l'interface
+    serverUrlInput.value = serverUrl;
+    
+    // Mettre à jour l'URL dans le background script
+    chrome.runtime.sendMessage({ action: 'updateApiUrl', url: serverUrl }, () => {
+      if (chrome.runtime.lastError) {
+        loginLog(`Erreur lors de la mise à jour de l'URL: ${chrome.runtime.lastError.message}`, 'error');
+      }
+      
+      // Vérifier l'état de connexion au serveur
+      updateServerStatus();
+    });
   });
   
   // Gestionnaire pour le formulaire de connexion
@@ -55,6 +96,8 @@ document.addEventListener('DOMContentLoaded', () => {
       showError('Veuillez saisir un mot de passe');
       return;
     }
+    
+    loginLog(`Tentative de connexion avec mot de passe: ${password === 'debug' ? 'debug' : '********'}`);
     
     // Désactiver le bouton pendant la connexion
     loginButton.disabled = true;
@@ -69,21 +112,38 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Configuration du serveur
   serverConfigBtn.addEventListener('click', () => {
-    serverConfigPanel.style.display = serverConfigPanel.style.display === 'none' ? 'block' : 'none';
+    const isVisible = serverConfigPanel.style.display === 'block';
+    serverConfigPanel.style.display = isVisible ? 'none' : 'block';
+    loginLog(`Panneau de configuration ${isVisible ? 'masqué' : 'affiché'}`);
   });
   
   saveServerConfig.addEventListener('click', () => {
     const newUrl = serverUrlInput.value.trim();
-    if (newUrl) {
-      serverUrl = newUrl;
-      // Sauvegarder dans le stockage local et mettre à jour l'URL dans le background script
-      chrome.storage.local.set({ 'apiBaseUrl': newUrl }, () => {
-        chrome.runtime.sendMessage({ action: 'updateApiUrl', url: newUrl }, () => {
-          updateStatus();
-        });
-      });
-      serverConfigPanel.style.display = 'none';
+    if (!newUrl) {
+      loginLog('URL vide, aucune action');
+      return;
     }
+    
+    loginLog(`Sauvegarde de la nouvelle URL du serveur: ${newUrl}`);
+    
+    // Sauvegarder dans le stockage local et mettre à jour l'URL dans le background script
+    chrome.storage.local.set({ 'apiBaseUrl': newUrl }, () => {
+      if (chrome.runtime.lastError) {
+        loginLog(`Erreur lors de l'enregistrement de l'URL: ${chrome.runtime.lastError.message}`, 'error');
+        return;
+      }
+      
+      chrome.runtime.sendMessage({ action: 'updateApiUrl', url: newUrl }, () => {
+        if (chrome.runtime.lastError) {
+          loginLog(`Erreur lors de la mise à jour de l'URL: ${chrome.runtime.lastError.message}`, 'error');
+          return;
+        }
+        
+        loginLog('URL mise à jour avec succès');
+        updateServerStatus();
+        serverConfigPanel.style.display = 'none';
+      });
+    });
   });
   
   // Gestion de la réponse de connexion
@@ -94,37 +154,26 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Vérifier d'abord s'il y a eu une erreur de communication
     if (chrome.runtime.lastError) {
-      console.error('Erreur de communication:', chrome.runtime.lastError);
-      showError('Erreur de communication avec le serveur');
+      loginLog(`Erreur de communication: ${chrome.runtime.lastError.message}`, 'error');
+      showError('Erreur de communication avec le background script');
       return;
     }
     
-    console.log('Réponse de login reçue:', response);
+    loginLog(`Réponse de login reçue: ${JSON.stringify(response)}`);
     
     // Gérer la réponse
     if (response && response.success) {
-      // Mode debug: accepter le mot de passe 'debug' pour les tests locaux
-      if (passwordInput.value === 'debug') {
-        console.log('Mode développement: authentification simulée');
-      }
-      
+      loginLog('Connexion réussie');
       handleLoginSuccess();
     } else {
       const errorMsg = response && response.error ? response.error : 'Erreur de connexion';
+      loginLog(`Échec de connexion: ${errorMsg}`, 'error');
       showError(errorMsg);
     }
   }
   
   // Gère le succès de connexion
   function handleLoginSuccess() {
-    console.log('Connexion réussie');
-    
-    // Indiquer au background script que l'authentification a réussi
-    chrome.runtime.sendMessage({ 
-      action: 'authenticationUpdated', 
-      authenticated: true 
-    });
-    
     // Afficher un message de succès avant la redirection
     loginForm.innerHTML = `
       <div style="text-align: center; color: #28a745; margin: 20px 0;">
@@ -134,50 +183,53 @@ document.addEventListener('DOMContentLoaded', () => {
     `;
     
     document.getElementById('continue-btn').addEventListener('click', () => {
+      loginLog('Redirection vers la page principale');
       window.location.href = '../popup.html';
     });
   }
   
-  // Fonctions utilitaires simples
+  // Fonctions utilitaires
   function showError(message) {
+    loginLog(`Affichage de l'erreur: ${message}`, 'error');
     loginError.textContent = message;
     loginError.style.display = 'block';
   }
   
-  // Vérification du statut du serveur via le background script
-  function updateStatus() {
-    chrome.runtime.sendMessage({ action: 'getStatus' }, (response) => {
+  // Vérification du statut du serveur
+  function updateServerStatus() {
+    loginLog('Vérification du statut du serveur');
+    
+    chrome.runtime.sendMessage({ action: 'checkServerOnline' }, (response) => {
       // Gérer les erreurs de communication
       if (chrome.runtime.lastError) {
-        console.error('Erreur lors de la vérification du statut:', chrome.runtime.lastError);
-        statusIndicator.classList.remove('status-connected');
-        statusIndicator.classList.add('status-disconnected');
-        statusIndicator.title = 'Déconnecté du serveur';
+        loginLog(`Erreur lors de la vérification: ${chrome.runtime.lastError.message}`, 'error');
+        updateStatusIndicator(false);
         return;
       }
       
-      console.log('Réponse de statut reçue:', response);
+      loginLog(`Réponse de statut: ${JSON.stringify(response)}`);
       
-      if (response && response.status === 'connected') {
-        statusIndicator.classList.remove('status-disconnected');
-        statusIndicator.classList.add('status-connected');
-        statusIndicator.title = 'Connecté au serveur';
-        
-        // Vérifier aussi l'authentification après confirmation de connexion
-        chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (authResponse) => {
-          console.log('Statut d\'authentification:', authResponse);
-          // Si authentifié, rediriger vers la page principale
-          if (authResponse && authResponse.authenticated) {
-            console.log('Déjà authentifié, redirection vers popup');
-            // On peut rediriger directement ou attendre que l'utilisateur clique
-            // window.location.href = '../popup.html';
-          }
-        });
+      if (response && response.isConnected) {
+        loginLog('Serveur connecté');
+        updateStatusIndicator(true);
       } else {
-        statusIndicator.classList.remove('status-connected');
-        statusIndicator.classList.add('status-disconnected');
-        statusIndicator.title = 'Déconnecté du serveur';
+        loginLog('Serveur déconnecté');
+        updateStatusIndicator(false);
       }
     });
+  }
+  
+  // Met à jour l'indicateur visuel de statut
+  function updateStatusIndicator(isConnected) {
+    if (!statusIndicator) {
+      loginLog('Indicateur de statut non trouvé', 'error');
+      return;
+    }
+    
+    loginLog(`Mise à jour de l'indicateur: ${isConnected ? 'connecté' : 'déconnecté'}`);
+    
+    statusIndicator.className = 'status-indicator';
+    statusIndicator.classList.add(isConnected ? 'status-connected' : 'status-disconnected');
+    statusIndicator.title = isConnected ? 'Connecté au serveur' : 'Déconnecté du serveur';
   }
 });
