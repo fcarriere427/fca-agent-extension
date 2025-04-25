@@ -7,7 +7,6 @@ import { processUserInput } from './tasks/generalTasks.js';
 // Référence aux éléments de l'interface
 let userInput;
 let submitBtn;
-let statusIndicator;
 let quickTaskButtons;
 
 /**
@@ -17,7 +16,6 @@ let quickTaskButtons;
 export function initUI(elements) {
   userInput = elements.userInput;
   submitBtn = elements.submitBtn;
-  statusIndicator = elements.statusIndicator;
   quickTaskButtons = elements.quickTaskButtons;
 }
 
@@ -78,50 +76,10 @@ export function setupUI() {
     });
   });
   
-  // Mise à jour du statut de connexion
-  updateConnectionStatus();
-  
-  // Désactiver la vérification périodique du statut pour éviter les problèmes
-  // de rafraîchissement de l'indicateur
-  // const statusInterval = setInterval(updateConnectionStatus, 5000);
-  
-  // // Nettoyer l'intervalle lorsque la fenêtre popup est fermée
-  // window.addEventListener('unload', () => {
-  //   if (statusInterval) clearInterval(statusInterval);
-  // });
-  
-  // Ajouter un gestionnaire de clic sur l'indicateur de statut pour forcer une mise à jour
-  statusIndicator.addEventListener('click', () => {
-    console.log('Mise à jour manuelle du statut...');
-    updateConnectionStatus();
-  });
+  // La gestion des indicateurs est désormais déléguée au module status.js
 }
 
-/**
- * Met à jour l'indicateur de statut de connexion
- */
-export async function updateConnectionStatus() {
-  console.log('Vérification de l\'authentification...');
-  
-  // Priorité absolue à l'authentification - si nous sommes arrivés jusqu'ici dans
-  // l'interface principale, nous sommes authentifiés
-  statusIndicator.classList.remove('status-disconnected');
-  statusIndicator.classList.add('status-connected');
-  statusIndicator.title = 'Connecté et authentifié';
-  
-  // Juste pour le log, mais n'affecte pas l'indicateur
-  try {
-    const backendAuthResult = await new Promise(resolve => {
-      chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (response) => {
-        console.log('Réponse d\'authentification (background):', response);
-        resolve(response && response.authenticated);
-      });
-    });
-    console.log('Authentification vérifiée:', backendAuthResult);
-  } catch (error) {
-    console.error('Erreur lors de la vérification, mais l\'indicateur reste vert:', error);
-  }
-}
+// La fonction updateConnectionStatus a été déplacée dans le module status.js
 
 /**
  * Exécute une action rapide en fonction du type

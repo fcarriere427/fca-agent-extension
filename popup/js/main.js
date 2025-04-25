@@ -2,6 +2,7 @@
 import { checkAuthOnce } from './auth.js';
 import { initUI, setupUI } from './ui.js';
 import { initMessaging } from './messaging.js';
+import { initStatusIndicators } from './status.js';
 
 // Vérification immédiate d'authentification avant toute initialisation
 chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (response) => {
@@ -23,7 +24,8 @@ function initializeApp() {
     const userInput = document.getElementById('user-input');
     const submitBtn = document.getElementById('submit-btn');
     const responseArea = document.getElementById('response-area');
-    const statusIndicator = document.getElementById('status-indicator');
+    const authIndicator = document.getElementById('auth-indicator');
+    const serverIndicator = document.getElementById('server-indicator');
     const quickTaskButtons = document.querySelectorAll('.task-btn');
     
     // Initialiser le module de messagerie
@@ -33,9 +35,11 @@ function initializeApp() {
     initUI({
       userInput,
       submitBtn,
-      statusIndicator,
       quickTaskButtons
     });
+    
+    // Initialiser les indicateurs de statut
+    initStatusIndicators(authIndicator, serverIndicator);
     
     // Vérifier si l'utilisateur est authentifié avant tout
     checkAuthOnce(() => {

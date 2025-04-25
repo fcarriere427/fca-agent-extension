@@ -51,17 +51,25 @@ h2 {
   color: #4a5568;
 }
 
-#status-indicator {
-  width: 14px;
-  height: 14px;
+.status-container {
+  display: flex;
+  gap: 6px;
+}
+
+.status-indicator {
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  display: inline-block;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.3s ease;
   cursor: pointer;
   position: relative;
-  /* Forcé en vert par défaut pour l'authentification */
-  background-color: #38a169;
+  background-color: #e53e3e;
   color: white;
+  font-size: 10px;
+  font-weight: bold;
 }
 
 #status-indicator:hover {

@@ -10,7 +10,10 @@
   <div class="container">
     <header>
       <h1>FCA-Agent</h1>
-      <div id="status-indicator" class="status-connected" title="Connecté et authentifié">●</div>
+      <div class="status-container">
+        <div id="auth-indicator" class="status-indicator status-disconnected" title="État d'authentification">A</div>
+        <div id="server-indicator" class="status-indicator status-disconnected" title="État de connexion au serveur">S</div>
+      </div>
     </header>
     
     <div class="tasks-container">
