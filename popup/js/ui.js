@@ -1,6 +1,6 @@
 // FCA-Agent - Module d'interface utilisateur
 import { handleLogout } from './auth.js';
-import { checkServerConnection, testSimpleAPI } from './api.js';
+import { checkServerConnection } from '../../utils/api.js';
 import { displayMessage } from './messaging.js';
 import { processUserInput } from './tasks/generalTasks.js';
 
@@ -48,14 +48,6 @@ export function setupUI() {
   logoutBtn.addEventListener('click', handleLogout);
   header.appendChild(logoutBtn);
   
-  // Ajouter un bouton de test
-  const testBtn = document.createElement('button');
-  testBtn.textContent = "Test API";
-  testBtn.style.marginBottom = "10px";
-  testBtn.style.marginLeft = "10px";
-  testBtn.addEventListener('click', handleTestAPI);
-  header.appendChild(testBtn);
-  
   // Style pour le bouton déconnexion
   const style = document.createElement('style');
   style.textContent = `
@@ -91,18 +83,6 @@ export function setupUI() {
 }
 
 /**
- * Gère le test simple de l'API
- */
-async function handleTestAPI() {
-  try {
-    const result = await testSimpleAPI();
-    displayMessage('assistant', `Test de connexion réussi: "${result}"`);
-  } catch (error) {
-    displayMessage('assistant', `Erreur test: ${error.message}`);
-  }
-}
-
-/**
  * Met à jour l'indicateur de statut de connexion
  */
 export async function updateConnectionStatus() {
@@ -130,33 +110,6 @@ function executeQuickTask(taskType) {
       import('./tasks/gmailTasks.js')
         .then(module => module.executeGmailSummaryTask())
         .catch(error => displayMessage('assistant', `Erreur: ${error.message}`));
-      break;
-    
-    case 'email-summary':
-      import('./tasks/outlookTasks.js')
-        .then(module => module.executeOutlookSummaryTask())
-        .catch(error => displayMessage('assistant', `Erreur: ${error.message}`));
-      break;
-    
-    case 'teams-summary':
-      import('./tasks/teamsTasks.js')
-        .then(module => module.executeTeamsSummaryTask())
-        .catch(error => displayMessage('assistant', `Erreur: ${error.message}`));
-      break;
-    
-    case 'draft-email':
-      // Demander à l'utilisateur des détails supplémentaires
-      const taskPrompt = prompt('À propos de quoi souhaitez-vous rédiger un email ?');
-      if (!taskPrompt) return; // L'utilisateur a annulé
-      
-      import('./tasks/generalTasks.js')
-        .then(module => module.draftEmail(taskPrompt))
-        .catch(error => displayMessage('assistant', `Erreur: ${error.message}`));
-      break;
-    
-    case 'settings':
-      // Ouvrir la page des paramètres
-      window.location.href = 'settings/settings.html';
       break;
       
     default:

@@ -85,7 +85,6 @@ export function displayMessage(sender, text) {
   
   // Ajouter le conteneur au message
   messageElement.appendChild(textContainer);
-  
   responseArea.appendChild(messageElement);
   
   // Scroll vers le bas
@@ -122,15 +121,8 @@ export function displayLoadingMessage(text = 'En cours de traitement...') {
 /**
  * Affiche un message d'erreur avec lien de secours si nécessaire
  * @param {string} errorMessage - Message d'erreur
- * @param {string} [responseId] - ID de réponse pour le lien de secours (optionnel)
  */
 export function displayErrorMessage(errorMessage, responseId = null) {
-  let message = `Erreur : ${errorMessage}`;
-  
-  // Ajouter un lien de secours si un ID de réponse est fourni
-  if (responseId) {
-    message += `<br><br><a href="../fallback.html?responseId=${responseId}" target="_blank">Cliquez ici pour utiliser la méthode alternative</a>`;
-  }
-  
+  let message = `Erreur : ${errorMessage}`;  
   displayMessage('assistant', message);
 }

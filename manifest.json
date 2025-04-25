@@ -13,22 +13,12 @@
     "tabs"
   ],
   "host_permissions": [
-    "http://localhost:3001/*",
-    "http://fca-agent.letsq.xyz/*",
     "https://fca-agent.letsq.xyz/*",
     "https://mail.google.com/*"
   ],
   "background": {
     "service_worker": "background.js"
   },
-  "web_accessible_resources": [
-    {
-      "resources": ["fallback.html"],
-      "matches": [
-        "<all_urls>"
-      ]
-    }
-  ],
   "content_scripts": [
     {
       "matches": [
@@ -39,10 +29,7 @@
     },
     {
       "matches": [
-        "https://outlook.office.com/*",
-        "https://teams.microsoft.com/*",
-        "https://*.sharepoint.com/*",
-        "https://trello.com/*"
+        "https://outlook.office.com/*"
       ],
       "js": ["content.js"]
     }

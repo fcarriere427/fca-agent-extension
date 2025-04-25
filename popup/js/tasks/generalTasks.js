@@ -27,30 +27,6 @@ export function processUserInput(input) {
 }
 
 /**
- * Prépare un brouillon d'email selon les indications de l'utilisateur
- * @param {string} topic - Sujet de l'email à rédiger
- */
-export function draftEmail(topic) {
-  if (!topic) return;
-  
-  // Afficher le message utilisateur
-  displayMessage('user', `Brouillon d'email: ${topic}`);
-  
-  // Afficher un message de chargement
-  const loadingMsgId = displayLoadingMessage();
-  
-  // Envoyer au background script
-  chrome.runtime.sendMessage(
-    { 
-      action: 'executeTask', 
-      task: 'draft-email', 
-      data: { prompt: topic } 
-    },
-    response => handleTaskResponse(response, loadingMsgId)
-  );
-}
-
-/**
  * Gère la réponse d'une tâche exécutée
  * @param {Object} response - Réponse du background script
  * @param {string} loadingMsgId - ID du message de chargement à supprimer

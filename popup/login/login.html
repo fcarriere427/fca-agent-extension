@@ -19,12 +19,6 @@
         <h2>Connexion</h2>
       </div>
 
-      <!-- Message d'information sur le point d'entrée unique -->
-      <div style="background-color: #e8f4f8; padding: 10px; border-radius: 4px; margin-bottom: 15px; font-size: 12px;">
-        <p style="margin: 0 0 5px 0;"><strong>Point d'entrée unique</strong></p>
-        <p style="margin: 0;">Cette extension est le seul moyen de vous connecter à votre serveur FCA-Agent.</p>
-      </div>
-      
       <!-- Formulaire de connexion simplifié -->
       <form id="login-form" class="auth-form">
         <div class="form-group">
@@ -36,23 +30,6 @@
         </div>
         <div id="login-error" class="error-message"></div>
       </form>
-    </div>
-    
-    <div class="server-config">
-      <button id="server-config-btn" class="btn btn-small">Configurer le serveur</button>
-      <div id="server-config-panel" style="display: none;">
-        <div class="form-group">
-          <label for="server-url">URL du serveur</label>
-          <input type="text" id="server-url" placeholder="http://fca-agent.letsq.xyz/api">
-        </div>
-        <button id="save-server-config" class="btn btn-small">Enregistrer</button>
-      </div>
-    </div>
-    
-    <!-- Zone de statut -->
-    <div style="margin-top: 10px; text-align: center;">
-      <button id="check-auth-btn" class="btn btn-small">Vérifier l'authentification</button>
-      <div id="auth-result" style="margin-top: 5px; font-size: 12px; display: none;"></div>
     </div>
   </div>
   

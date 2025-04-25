@@ -1,8 +1,8 @@
 // FCA-Agent - Background Service Worker (version ultra-simplifiée)
 // Gère les communications avec le serveur Raspberry Pi
 
-// Configuration
-let API_BASE_URL = 'http://fca-agent.letsq.xyz/api'; // Valeur par défaut, sera mise à jour depuis le stockage
+// Configuration - URL par défaut, sera chargée depuis le stockage
+let API_BASE_URL = 'http://fca-agent.letsq.xyz/api'; 
 let isAuthenticated = false;
 
 // Gestionnaire de messages depuis le popup ou les content scripts
@@ -33,12 +33,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
   
   if (message.action === 'getUserData') {
-    // Vérifie l'authentification de manière simple, sans boucles infinies
+    // Vérifie l'authentification
     checkAuthentication()
       .then(authenticated => {
-        sendResponse({ 
-          isAuthenticated: authenticated
-        });
+        sendResponse({ isAuthenticated: authenticated });
       })
       .catch(() => {
         sendResponse({ isAuthenticated: false });
@@ -57,6 +55,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'updateApiUrl') {
     // Mettre à jour l'URL de l'API
     API_BASE_URL = message.url;
+    // Sauvegarder l'URL dans le stockage local pour persistance
+    chrome.storage.local.set({ 'apiBaseUrl': API_BASE_URL });
     sendResponse({ success: true });
     return true;
   }
@@ -66,6 +66,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     checkAuthentication()
       .then(authenticated => sendResponse({ authenticated }))
       .catch(error => sendResponse({ authenticated: false, error: error.message }));
+    return true;
+  }
+  
+  if (message.action === 'getApiUrl') {
+    // Renvoie l'URL de l'API actuelle
+    sendResponse({ url: API_BASE_URL });
     return true;
   }
 });
@@ -173,12 +179,7 @@ async function executeTask(taskType, taskData) {
     console.log(`Réponse reçue du serveur pour la tâche ${taskType}:`, {
       taskId: responseData.taskId,
       status: responseData.status,
-      hasResult: !!responseData.result,
-      resultDetails: responseData.result ? {
-        hasResponse: !!responseData.result.response,
-        responseLength: responseData.result.response ? responseData.result.response.length : 0,
-        responsePreview: responseData.result.response ? responseData.result.response.substring(0, 50) + '...' : 'Aucune réponse'
-      } : 'Pas de résultat'
+      hasResult: !!responseData.result
     });
     return responseData;
   } catch (error) {
@@ -187,7 +188,7 @@ async function executeTask(taskType, taskData) {
   }
 }
 
-// Initialisation simple : récupérer l'URL de l'API
+// Initialisation : récupérer l'URL de l'API depuis le stockage local
 chrome.runtime.onInstalled.addListener(() => {
   console.log('FCA-Agent installé/mis à jour');
   
@@ -205,7 +206,7 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
-// Au démarrage, uniquement charger l'URL de l'API
+// Au démarrage, charger l'URL de l'API depuis le stockage local
 chrome.runtime.onStartup.addListener(() => {
   chrome.storage.local.get(['apiBaseUrl'], (result) => {
     if (result.apiBaseUrl) {

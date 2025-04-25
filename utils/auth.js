@@ -1,4 +1,4 @@
-// FCA-Agent - Utilitaire d'authentification
+// FCA-Agent - Utilitaire d'authentification (version simplifiée)
 
 /**
  * Vérifie si l'utilisateur est authentifié
@@ -6,8 +6,8 @@
  */
 async function isAuthenticated() {
   return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action: 'validateToken' }, (response) => {
-      resolve(response && response.success === true);
+    chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (response) => {
+      resolve(response && response.authenticated === true);
     });
   });
 }
@@ -19,8 +19,8 @@ async function isAuthenticated() {
 async function getUserData() {
   return new Promise((resolve) => {
     chrome.runtime.sendMessage({ action: 'getUserData' }, (response) => {
-      if (response && response.isAuthenticated && response.userData) {
-        resolve(response.userData);
+      if (response && response.isAuthenticated) {
+        resolve({ isAuthenticated: true });
       } else {
         resolve(null);
       }

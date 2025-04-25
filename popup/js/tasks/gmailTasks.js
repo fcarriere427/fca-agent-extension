@@ -18,9 +18,7 @@ export function executeGmailSummaryTask() {
       return;
     }
     
-    // Demander à l'utilisateur un sujet de recherche optionnel
-    const searchQuery = prompt('Entrez un sujet spécifique pour cibler la synthèse (laissez vide pour une synthèse générale) :', '');
-    const taskTitle = searchQuery ? `Synthèse des emails Gmail sur "${searchQuery}"` : 'Synthèse des emails Gmail';
+    const taskTitle = 'Synthèse des emails Gmail';
     
     // Afficher un message indiquant que nous extrayons les emails
     displayMessage('user', taskTitle);
@@ -28,7 +26,8 @@ export function executeGmailSummaryTask() {
     
     // Extraire les emails de Gmail
     try {
-      await extractGmailData(activeTabId, searchQuery, loadingMsgId);
+      // Pas de requête de recherche spécifique pour l'instant
+      await extractGmailData(activeTabId, loadingMsgId);
     } catch (error) {
       removeMessage(loadingMsgId);
       displayMessage('assistant', `Erreur lors de l'extraction des emails : ${error.message}`);
@@ -39,10 +38,9 @@ export function executeGmailSummaryTask() {
 /**
  * Extrait les données de Gmail via l'API scripting
  * @param {number} tabId - ID de l'onglet actif 
- * @param {string} searchQuery - Requête de recherche (optionnelle)
  * @param {string} loadingMsgId - ID du message de chargement
  */
-async function extractGmailData(tabId, searchQuery, loadingMsgId) {
+async function extractGmailData(tabId, loadingMsgId) {
   // Injecter et exécuter le code d'extraction directement dans la page Gmail
   chrome.scripting.executeScript({
     target: { tabId: tabId },
@@ -121,8 +119,7 @@ async function extractGmailData(tabId, searchQuery, loadingMsgId) {
     
     // Envoyer les données extraites au serveur pour traitement par Claude
     console.log('Envoi des données pour analyse :', {
-      emails: emails.length,
-      searchQuery: searchQuery
+      emails: emails.length
     });
     
     chrome.runtime.sendMessage(
@@ -130,8 +127,7 @@ async function extractGmailData(tabId, searchQuery, loadingMsgId) {
         action: 'executeTask',
         task: 'gmail-summary',
         data: {
-          emails: emails,
-          searchQuery: searchQuery
+          emails: emails
         }
       },
       response => {
