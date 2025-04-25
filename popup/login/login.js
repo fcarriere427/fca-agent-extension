@@ -1,4 +1,21 @@
-// FCA-Agent - Script de la page de connexion (version ultra-simplifiée)
+// FCA-Agent - Script de la page de connexion (version simplifiée et robuste)
+
+// Vérification immédiate si l'utilisateur est déjà authentifié
+chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (response) => {
+  // Gérer les erreurs de communication
+  if (chrome.runtime.lastError) {
+    console.error('Erreur lors de la vérification d\'authentification:', chrome.runtime.lastError);
+    return; // Rester sur la page de login en cas d'erreur
+  }
+  
+  if (response && response.authenticated) {
+    console.log('Déjà authentifié, redirection vers la page principale');
+    window.location.href = '../popup.html';
+    return;
+  }
+  
+  console.log('Non authentifié, affichage de la page de login');
+});
 
 document.addEventListener('DOMContentLoaded', () => {
   // Éléments DOM
