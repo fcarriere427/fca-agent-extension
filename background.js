@@ -55,16 +55,27 @@ function notifyStatusToComponents() {
   
   console.log('Notification des états initiaux - Auth:', authStatus, 'Server:', serverStatus);
   
-  // Envoi des statuts séparément pour que les composants puissent les traiter indépendamment
-  chrome.runtime.sendMessage({ 
-    action: 'authStatusChanged', 
-    status: authStatus
-  });
-  
-  chrome.runtime.sendMessage({ 
-    action: 'serverStatusChanged', 
-    status: serverStatus
-  });
+  // Vérifier si des listeners existent avant d'envoyer des messages
+  try {
+    // Envoyer les messages de manière sécurisée pour éviter l'erreur "Receiving end does not exist"
+    chrome.runtime.sendMessage({ 
+      action: 'authStatusChanged', 
+      status: authStatus
+    }).catch(err => {
+      // Ignorer l'erreur "Receiving end does not exist"
+      console.log('Pas de destinataire pour le message authStatusChanged, normal au démarrage');
+    });
+    
+    chrome.runtime.sendMessage({ 
+      action: 'serverStatusChanged', 
+      status: serverStatus
+    }).catch(err => {
+      // Ignorer l'erreur "Receiving end does not exist"
+      console.log('Pas de destinataire pour le message serverStatusChanged, normal au démarrage');
+    });
+  } catch (error) {
+    console.log('Erreur lors de la notification des statuts, normal au démarrage:', error.message);
+  }
 }
 
 // Installation/mise à jour de l'extension
