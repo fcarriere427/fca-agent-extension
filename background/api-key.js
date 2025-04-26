@@ -2,7 +2,7 @@
 
 // Clé API fixe pour l'authentification avec le serveur
 // Cette clé doit correspondre exactement à celle configurée dans le fichier .env du serveur
-export const API_KEY = 'test pour git';
+export const API_KEY = 'cestpasfaciledetrouvercettecle1993';
 
 // Fonction utilitaire pour récupérer la clé API
 export function getApiKey() {
