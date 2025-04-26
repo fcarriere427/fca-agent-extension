@@ -2,9 +2,9 @@
 
 import { checkAuthOnce, handleLogout } from './auth.js';
 import { initStatusIndicators } from './status.js';
-import { setupMessageHandlers } from './messaging.js';
-import { initUI } from './ui.js';
+import { setupMessageHandlers } from '../../background/handlers.js';
 import { setupTaskHandlers } from './task-handlers.js';  // Chemin corrigé
+import { initUI } from './ui.js';
 
 // Logger spécifique au script principal
 function mainLog(message, level = 'info') {
