@@ -48,12 +48,13 @@ export function setAuthenticated(status, token = null) {
     authToken = token;
     
     // Sauvegarde de secours en sessionStorage (pour récupération synchrone)
-    try {
-      window.sessionStorage.setItem('authTokenBackup', token);
+    chrome.storage.session.set({'authTokenBackup': token}, () => {
+    if (chrome.runtime.lastError) {
+      authLog(`Impossible de sauvegarder le token en session storage: ${chrome.runtime.lastError.message}`, 'error');
+      } else {
       authLog(`Token sauvegardé en session storage pour récupération d'urgence`);
-    } catch (e) {
-      authLog(`Impossible de sauvegarder le token en session storage: ${e.message}`, 'error');
-    }
+      }
+    })
     
     // Stockage local (persistant) avec le token
     chrome.storage.local.set({ 'authToken': token }, () => {
@@ -195,9 +196,11 @@ export async function loginToServer(password) {
     authToken = null;
     
     // Supprimer tout ancien token du stockage par précaution
-    try {
-      window.sessionStorage.removeItem('authTokenBackup');
-    } catch (e) {}
+    chrome.storage.session.remove('authTokenBackup', () => {
+    if (chrome.runtime.lastError) {
+        authLog(`Erreur lors de la suppression du token de session: ${chrome.runtime.lastError.message}`, 'warn');
+      }
+    })
     
     const response = await fetch(`${apiUrl}/auth/login`, {
       method: 'POST',
@@ -352,7 +355,11 @@ export async function checkAuthWithServer() {
     authLog('ERREUR CRITIQUE: Marqué comme authentifié mais aucun token disponible!', 'error');
     
     // Essayer de récupérer depuis le stockage de secours
-    const backupToken = window.sessionStorage.getItem('authTokenBackup');
+    const backupToken = await new Promise((resolve) => {
+      chrome.storage.session.get(['authTokenBackup'], (result) => {
+        resolve(result.authTokenBackup || null);
+      });
+    });
     if (backupToken) {
       authLog('Récupération du token depuis le stockage de secours', 'warn');
       authToken = backupToken;

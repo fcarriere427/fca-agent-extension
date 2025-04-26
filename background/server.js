@@ -206,16 +206,24 @@ export async function executeTaskOnServer(taskType, taskData) {
       
       // Tenter une récupération d'urgence
       try {
-        const backupToken = window.sessionStorage.getItem('authTokenBackup');
+        const backupToken = await new Promise((resolve) => {
+          chrome.storage.session.get(['authTokenBackup'], (result) => {
+            resolve(result.authTokenBackup || null);
+          });
+        });
+        
         if (backupToken) {
           // Récupération manuelle depuis la sauvegarde
-          authModule.setToken(backupToken);
+          await authModule.setToken(backupToken);
           serverLog('Token récupéré depuis la sauvegarde d\'urgence', 'warn');
         } else {
-          throw new Error('Aucun token de sauvegarde disponible');
+          // Pas de token de sauvegarde, réinitialiser l'authentification
+          await authModule.resetAuthentication();
+          serverLog('Aucun token de sauvegarde disponible, réinitialisation de l\'authentification', 'error');
+          throw new Error('Authentification requise pour cette action');
         }
       } catch (e) {
-        serverLog(`Impossible de récupérer un token: ${e.message}`, 'error');
+        serverLog(`Erreur lors de la récupération du token: ${e.message}`, 'error');
         throw new Error('Authentification requise pour cette action');
       }
     } else {
