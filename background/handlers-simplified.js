@@ -20,7 +20,12 @@ export function setupMessageHandlers() {
         break;
         
       case 'getAuthStatus':
-        const authStatus = { isAuthenticated: isAuthConfigured() };
+        // Désormais, on réutilise simplement le statut du serveur pour éviter la duplication
+        const serverStatus = getServerStatus();
+        const authStatus = {
+          isAuthenticated: serverStatus.authValid === true,
+          serverStatus: serverStatus // Inclure le statut complet du serveur
+        };
         handlerLog(`getAuthStatus => ${JSON.stringify(authStatus)}`);
         sendResponse(authStatus);
         break;
@@ -76,13 +81,10 @@ export function setupMessageHandlers() {
         break;
         
       case 'getAuthAndServerStatus':
-        // Combine les deux statuts en une seule réponse
-        const combinedStatus = {
-          auth: { isAuthenticated: isAuthConfigured() },
-          server: getServerStatus()
-        };
-        handlerLog(`getAuthAndServerStatus => ${JSON.stringify(combinedStatus)}`);
-        sendResponse(combinedStatus);
+        // Renvoyer simplement le statut complet du serveur qui inclut désormais l'authentification
+        const fullServerStatus = getServerStatus();
+        handlerLog(`getAuthAndServerStatus => ${JSON.stringify(fullServerStatus)}`);
+        sendResponse(fullServerStatus);
         break;
         
       default:
@@ -99,12 +101,19 @@ async function handleGetStatus(sendResponse) {
   handlerLog('handleGetStatus appelé');
   
   try {
-    // Vérification du serveur
-    const isOnline = await checkServerOnline();
+    // Vérification complète du serveur et de la clé API
+    await checkServerOnline();
     
+    // Récupérer le statut complet du serveur
+    const fullStatus = getServerStatus();
+    
+    // Formater la réponse pour la compatibilité avec l'ancien format
     const response = { 
-      status: isOnline ? 'connected' : 'disconnected',
-      authenticated: isAuthConfigured() // Toujours authentifié si la clé API est configurée
+      status: fullStatus.isConnected ? 'connected' : 'disconnected',
+      authenticated: fullStatus.authValid === true,
+      authValid: fullStatus.authValid,  // Ajouter nouvelle propriété
+      statusCode: fullStatus.statusCode,  // Ajouter code de statut
+      lastCheck: fullStatus.lastCheck  // Ajouter timestamp
     };
     
     handlerLog(`handleGetStatus => ${JSON.stringify(response)}`);
@@ -113,7 +122,8 @@ async function handleGetStatus(sendResponse) {
     handlerLog(`Erreur lors de la vérification du statut: ${error.message}`, 'error');
     sendResponse({ 
       status: 'disconnected', 
-      authenticated: isAuthConfigured(),
+      authenticated: false,
+      authValid: null,
       error: error.message 
     });
   }

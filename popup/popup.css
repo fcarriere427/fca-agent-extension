@@ -69,6 +69,11 @@ h1 {
   color: white !important;
 }
 
+.status-warning {
+  background-color: #dd6b20 !important; /* Orange */
+  color: white !important;
+}
+
 .status-disconnected {
   background-color: #e53e3e !important; /* Rouge */
   color: white !important;
