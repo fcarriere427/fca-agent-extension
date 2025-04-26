@@ -6,18 +6,29 @@ import { getAuthHeaders, setAuthenticated } from './auth.js';
 // État de connexion au serveur
 let isServerConnected = false;
 
-// Logger spécifique au module serveur
+// Logger spécifique au module serveur avec améliorations
 function serverLog(message, level = 'info') {
   const prefix = '[EXT:SERVER]';
+  const isDebug = true; // Activer pour plus de détails
+  
+  // Ajouter un timestamp pour faciliter le suivi
+  const now = new Date();
+  const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${now.getMilliseconds().toString().padStart(3, '0')}`;
+  
   switch(level) {
     case 'error':
-      console.error(`${prefix} ${message}`);
+      console.error(`${prefix} [${timestamp}] ${message}`);
       break;
     case 'warn':
-      console.warn(`${prefix} ${message}`);
+      console.warn(`${prefix} [${timestamp}] ${message}`);
+      break;
+    case 'debug':
+      if (isDebug) {
+        console.debug(`${prefix} [${timestamp}] DEBUG: ${message}`);
+      }
       break;
     default:
-      console.log(`${prefix} ${message}`);
+      console.log(`${prefix} [${timestamp}] ${message}`);
   }
 }
 
@@ -57,18 +68,38 @@ export function setServerStatus(status) {
 // Vérifie si le serveur est en ligne
 export async function checkServerOnline() {
   const apiUrl = getApiUrl();
+  const auth = getAuthHeaders();
   serverLog(`Vérification si le serveur est en ligne: ${apiUrl}/status`);
+  serverLog(`Headers d'authentification: ${JSON.stringify(auth)}`, 'debug');
   
   try {
     // Utiliser une requête simple pour vérifier si le serveur est en ligne
+    // IMPORTANT: Utiliser les headers d'authentification si disponibles
+    const headers = { 
+      'Content-Type': 'application/json',
+      ...auth  // Inclure les headers d'authentification si présents
+    };
+    
+    serverLog(`Headers complets: ${JSON.stringify(headers)}`, 'debug');
+    
     const response = await fetch(`${apiUrl}/status`, {
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
+      headers: headers,
       cache: 'no-cache', // IMPORTANT: Pas de cache
-      credentials: 'include' // Inclure les cookies pour la vérification d'auth
+      credentials: 'omit'  // Ne plus utiliser les cookies
     });
     
     serverLog(`Réponse du serveur: status=${response.status}`);
+    
+    // Tenter de lire le corps de la réponse pour le débogage
+    let responseText = '';
+    try {
+      const data = await response.json();
+      responseText = JSON.stringify(data);
+      serverLog(`Corps de la réponse: ${responseText}`, 'debug');
+    } catch (e) {
+      // Ignorer les erreurs de parsing
+    }
     
     // Si on reçoit une réponse, le serveur est en ligne
     const isOnline = response.ok || response.status === 304;
@@ -112,6 +143,7 @@ export async function executeTaskOnServer(taskType, taskData) {
   const authHeaders = getAuthHeaders();
   
   serverLog(`Exécution de la tâche ${taskType} sur le serveur: ${apiUrl}/tasks`);
+  serverLog(`Headers d'authentification: ${JSON.stringify(authHeaders)}`, 'debug');
   
   try {
     const response = await fetch(`${apiUrl}/tasks`, {
@@ -121,7 +153,7 @@ export async function executeTaskOnServer(taskType, taskData) {
         ...authHeaders
       },
       body: JSON.stringify({ type: taskType, data: taskData }),
-      credentials: 'include'
+      credentials: 'omit' // Utiliser uniquement les tokens, pas les cookies
     });
     
     // Si le serveur répond, c'est qu'il est connecté
@@ -130,14 +162,22 @@ export async function executeTaskOnServer(taskType, taskData) {
     serverLog(`Réponse du serveur: status=${response.status}`);
     
     if (response.status === 401) {
-      // Authentification expirée
-      serverLog('Authentification expirée, déconnexion forcée', 'warn');
+      // Authentification expirée ou token manquant
+      serverLog('Authentification échouée, déconnexion forcée', 'warn');
       setAuthenticated(false);
-      throw new Error('Session expirée, veuillez vous reconnecter');
+      throw new Error('Session expirée ou invalide, veuillez vous reconnecter');
     }
     
     if (!response.ok) {
-      throw new Error(`Erreur API: ${response.status}`);
+      let errorMessage = `Erreur API: ${response.status}`;
+      try {
+        const errorData = await response.json();
+        errorMessage += ` - ${JSON.stringify(errorData)}`;
+        serverLog(`Détails de l'erreur: ${errorMessage}`, 'error');
+      } catch (e) {
+        // Ignorer les erreurs de parsing
+      }
+      throw new Error(errorMessage);
     }
     
     const result = await response.json();

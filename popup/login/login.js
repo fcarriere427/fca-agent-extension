@@ -1,17 +1,28 @@
 // FCA-Agent - Script de la page de connexion (version simplifiée et robuste)
 
-// Logger spécifique à la page de login
+// Logger spécifique à la page de login avec niveau de débogage amélioré
 function loginLog(message, level = 'info') {
   const prefix = '[UI:LOGIN]';
+  const isDebug = true; // Activer pour plus de détails
+  
+  // Ajouter un timestamp pour faciliter le suivi
+  const now = new Date();
+  const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${now.getMilliseconds().toString().padStart(3, '0')}`;
+  
   switch(level) {
     case 'error':
-      console.error(`${prefix} ${message}`);
+      console.error(`${prefix} [${timestamp}] ${message}`);
       break;
     case 'warn':
-      console.warn(`${prefix} ${message}`);
+      console.warn(`${prefix} [${timestamp}] ${message}`);
+      break;
+    case 'debug':
+      if (isDebug) {
+        console.debug(`${prefix} [${timestamp}] DEBUG: ${message}`);
+      }
       break;
     default:
-      console.log(`${prefix} ${message}`);
+      console.log(`${prefix} [${timestamp}] ${message}`);
   }
 }
 
@@ -146,6 +157,47 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   });
   
+  // Vérifie que le token est correctement stocké dans les headers
+  function checkTokenInHeaders(expectedToken) {
+    loginLog('Vérification que le token est correctement utilisé dans les headers...');
+    
+    // Délai court pour permettre au background de traiter le token
+    setTimeout(() => {
+      chrome.runtime.sendMessage({ action: 'getAuthStatus' }, (response) => {
+        if (chrome.runtime.lastError) {
+          loginLog(`Erreur lors de la vérification du token: ${chrome.runtime.lastError.message}`, 'error');
+          return;
+        }
+        
+        loginLog(`Statut d'authentification après login: ${JSON.stringify(response)}`);
+        
+        // Vérifier que l'authentification est active et qu'un token est présent
+        if (!response.isAuthenticated || !response.hasToken) {
+          loginLog('ALERTE: Statut incohérent - authentifié mais pas de token!', 'error');
+        } else {
+          loginLog('Token correctement stocké dans le statut d\'authentification', 'debug');
+          
+          // Vérifier le stockage local
+          chrome.storage.local.get(['authToken'], (result) => {
+            if (chrome.runtime.lastError) {
+              loginLog(`Erreur lors de l'accès au stockage: ${chrome.runtime.lastError.message}`, 'error');
+              return;
+            }
+            
+            const storedToken = result.authToken;
+            if (!storedToken) {
+              loginLog('ALERTE: Token non trouvé dans le stockage local!', 'error');
+            } else if (storedToken !== expectedToken) {
+              loginLog(`ALERTE: Le token dans le stockage (${storedToken.substring(0, 5)}...) ne correspond pas au token reçu (${expectedToken.substring(0, 5)}...)!`, 'error');
+            } else {
+              loginLog('Token correctement stocké en local', 'debug');
+            }
+          });
+        }
+      });
+    }, 500); // Attendre 500ms pour s'assurer que le token a été traité par le background
+  }
+  
   // Gestion de la réponse de connexion
   function handleLoginResponse(response) {
     // Réactiver le bouton
@@ -161,8 +213,21 @@ document.addEventListener('DOMContentLoaded', () => {
     
     loginLog(`Réponse de login reçue: ${JSON.stringify(response)}`);
     
-    // Gérer la réponse
+    // Vérifier explicitement la présence du token
     if (response && response.success) {
+      if (!response.token) {
+        loginLog('ERREUR: Connexion signalée comme réussie, mais aucun token dans la réponse!', 'error');
+        showError('Erreur de configuration: Token manquant');
+        return;
+      }
+      
+      // Afficher des informations sur le token pour débogage
+      const token = response.token;
+      loginLog(`Token reçu: ${token.substring(0, 5)}...${token.substring(token.length-5)}`, 'debug');
+      
+      // Vérifier si le token est actuellement présent dans les headers
+      checkTokenInHeaders(token);
+      
       loginLog('Connexion réussie');
       handleLoginSuccess();
     } else {
@@ -174,6 +239,13 @@ document.addEventListener('DOMContentLoaded', () => {
   
   // Gère le succès de connexion
   function handleLoginSuccess() {
+    // Forcer une vérification du statut
+    chrome.runtime.sendMessage({ action: 'forceServerCheck' }, () => {
+      if (chrome.runtime.lastError) {
+        loginLog(`Erreur lors de la vérification du serveur: ${chrome.runtime.lastError.message}`, 'warn');
+      }
+    });
+    
     // Afficher un message de succès avant la redirection
     loginForm.innerHTML = `
       <div style="text-align: center; color: #28a745; margin: 20px 0;">
@@ -195,11 +267,12 @@ document.addEventListener('DOMContentLoaded', () => {
     loginError.style.display = 'block';
   }
   
-  // Vérification du statut du serveur
+  // Vérifier l'état de connexion au serveur
   function updateServerStatus() {
     loginLog('Vérification du statut du serveur');
     
-    chrome.runtime.sendMessage({ action: 'checkServerOnline' }, (response) => {
+    // Force server check pour s'assurer d'avoir le statut le plus récent
+    chrome.runtime.sendMessage({ action: 'forceServerCheck' }, (response) => {
       // Gérer les erreurs de communication
       if (chrome.runtime.lastError) {
         loginLog(`Erreur lors de la vérification: ${chrome.runtime.lastError.message}`, 'error');
