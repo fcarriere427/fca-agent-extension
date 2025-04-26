@@ -73,6 +73,11 @@ export async function checkServerOnline() {
   serverLog(`Headers d'authentification: ${JSON.stringify(auth)}`, 'debug');
   
   try {
+    // Vérification que l'authentification est marquée comme active si un token est présent
+    if (auth.Authorization && !isServerConnected) {
+      serverLog('Token présent mais statut serveur déconnecté, possible incohérence', 'warn');
+    }
+    
     // Utiliser une requête simple pour vérifier si le serveur est en ligne
     // IMPORTANT: Utiliser les headers d'authentification si disponibles
     const headers = { 
@@ -80,7 +85,7 @@ export async function checkServerOnline() {
       ...auth  // Inclure les headers d'authentification si présents
     };
     
-    serverLog(`Headers complets: ${JSON.stringify(headers)}`, 'debug');
+    serverLog(`Headers complets pour vérification serveur: ${JSON.stringify(headers)}`, 'debug');
     
     const response = await fetch(`${apiUrl}/status`, {
       method: 'GET',
@@ -93,19 +98,31 @@ export async function checkServerOnline() {
     
     // Tenter de lire le corps de la réponse pour le débogage
     let responseText = '';
+    let responseData = null;
     try {
-      const data = await response.json();
-      responseText = JSON.stringify(data);
+      responseData = await response.json();
+      responseText = JSON.stringify(responseData);
       serverLog(`Corps de la réponse: ${responseText}`, 'debug');
     } catch (e) {
       // Ignorer les erreurs de parsing
+      serverLog('Pas de contenu JSON dans la réponse', 'debug');
+    }
+    
+    // Si erreur 401 mais avec un token, c'est que le token est probablement expiré
+    if (response.status === 401 && auth.Authorization) {
+      serverLog('Erreur 401 avec token présent, possible token expiré ou invalide', 'warn');
+      
+      // Notifier le module d'auth pour vérification
+      import('./auth.js').then(authModule => {
+        authModule.checkAuthWithServer().catch(() => {});
+      });
     }
     
     // Si on reçoit une réponse, le serveur est en ligne
     const isOnline = response.ok || response.status === 304;
     setServerStatus(isOnline);
     
-    // Si authentification OK, on considère que le serveur est en ligne
+    // Si authentification requise, on considère que le serveur est en ligne
     if (response.status === 401) {
       serverLog('Serveur en ligne mais authentification requise');
       setServerStatus(true); // Le serveur est en ligne même si auth échouée
@@ -145,13 +162,47 @@ export async function executeTaskOnServer(taskType, taskData) {
   serverLog(`Exécution de la tâche ${taskType} sur le serveur: ${apiUrl}/tasks`);
   serverLog(`Headers d'authentification: ${JSON.stringify(authHeaders)}`, 'debug');
   
+  // Vérifier explicitement si des headers d'auth sont présents pour des tâches protégées
+  const securedTasks = ['processUserInput', 'email-summary', 'teams-summary', 'draft-email'];
+  if (securedTasks.includes(taskType) && !authHeaders.Authorization) {
+    serverLog('ERREUR CRITIQUE: Tentative d\'exécution de tâche sécurisée sans token!', 'error');
+    
+    // Vérifier si l'authentification est marquée comme active mais sans token
+    const authModule = await import('./auth.js');
+    if (authModule.getAuthStatus().isAuthenticated) {
+      serverLog('Incohérence: authentifié sans token disponible, tentative de récupération', 'warn');
+      
+      // Tenter une récupération d'urgence
+      try {
+        const backupToken = window.sessionStorage.getItem('authTokenBackup');
+        if (backupToken) {
+          // Récupération manuelle depuis la sauvegarde
+          authModule.setToken(backupToken);
+          serverLog('Token récupéré depuis la sauvegarde d\'urgence', 'warn');
+        } else {
+          throw new Error('Aucun token de sauvegarde disponible');
+        }
+      } catch (e) {
+        serverLog(`Impossible de récupérer un token: ${e.message}`, 'error');
+        throw new Error('Authentification requise pour cette action');
+      }
+    } else {
+      throw new Error('Authentification requise pour cette action');
+    }
+  }
+  
   try {
+    // Récupérer les headers à nouveau au cas où ils auraient été mis à jour
+    const headers = {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders() // Utiliser getAuthHeaders() directement pour obtenir la dernière version
+    };
+    
+    serverLog(`Headers complets pour requête: ${JSON.stringify(headers)}`, 'debug');
+    
     const response = await fetch(`${apiUrl}/tasks`, {
       method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...authHeaders
-      },
+      headers: headers,
       body: JSON.stringify({ type: taskType, data: taskData }),
       credentials: 'omit' // Utiliser uniquement les tokens, pas les cookies
     });
@@ -162,9 +213,13 @@ export async function executeTaskOnServer(taskType, taskData) {
     serverLog(`Réponse du serveur: status=${response.status}`);
     
     if (response.status === 401) {
-      // Authentification expirée ou token manquant
+      // Authentification échouée ou token manquant/invalide
       serverLog('Authentification échouée, déconnexion forcée', 'warn');
-      setAuthenticated(false);
+      
+      // Utiliser import() pour éviter les dépendances circulaires
+      const authModule = await import('./auth.js');
+      authModule.resetAuthentication();
+      
       throw new Error('Session expirée ou invalide, veuillez vous reconnecter');
     }
     
