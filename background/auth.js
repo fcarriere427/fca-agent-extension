@@ -104,7 +104,8 @@ export async function loginToServer(password) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ password }),
-      credentials: 'include'
+      // Plus besoin de 'credentials: include' car nous n'utilisons plus les cookies
+      credentials: 'omit'
     });
     
     // Lecture du corps de la réponse
@@ -153,13 +154,14 @@ export async function logoutFromServer() {
   authLog(`Tentative de déconnexion à ${apiUrl}/auth/logout`);
   
   try {
-    // D'abord, mise à jour locale pour assurer la déconnexion même si le serveur échoue
+    // D'abord, mise à jour locale pour assurer la déconnexion
     setAuthenticated(false);
     
-    // Puis, notification au serveur
+    // Puis, notification au serveur (avec le token dans l'en-tête)
     const response = await fetch(`${apiUrl}/auth/logout`, {
       method: 'POST',
-      credentials: 'include'
+      headers: getAuthHeaders(),
+      credentials: 'omit'
     });
     
     if (response.ok) {
@@ -183,7 +185,8 @@ export async function checkAuthWithServer() {
   try {
     const response = await fetch(`${apiUrl}/auth/check`, {
       method: 'GET',
-      credentials: 'include',
+      // Plus besoin de 'credentials: include' car nous n'utilisons plus les cookies
+      credentials: 'omit',
       headers: getAuthHeaders(),
       cache: 'no-cache' // IMPORTANT: Ne pas utiliser le cache
     });
