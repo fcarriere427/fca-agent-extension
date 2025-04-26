@@ -1,30 +1,6 @@
 // FCA-Agent - Script de la page de connexion (version simplifiée et robuste)
+import { loginLog } from './login-logger.js';
 
-// Logger spécifique à la page de login avec niveau de débogage amélioré
-function loginLog(message, level = 'info') {
-  const prefix = '[UI:LOGIN]';
-  const isDebug = true; // Activer pour plus de détails
-  
-  // Ajouter un timestamp pour faciliter le suivi
-  const now = new Date();
-  const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${now.getMilliseconds().toString().padStart(3, '0')}`;
-  
-  switch(level) {
-    case 'error':
-      console.error(`${prefix} [${timestamp}] ${message}`);
-      break;
-    case 'warn':
-      console.warn(`${prefix} [${timestamp}] ${message}`);
-      break;
-    case 'debug':
-      if (isDebug) {
-        console.debug(`${prefix} [${timestamp}] DEBUG: ${message}`);
-      }
-      break;
-    default:
-      console.log(`${prefix} [${timestamp}] ${message}`);
-  }
-}
 
 // Vérification immédiate si l'utilisateur est déjà authentifié
 loginLog('Vérification du statut d\'authentification au chargement');

@@ -13,41 +13,89 @@ export function saveTokenToStorage(token) {
     return Promise.resolve(false);
   }
   
-  // Sauvegarde dans chrome.storage.session pour une récupération rapide
-  chrome.storage.session.set({'authTokenBackup': token}, () => {
-    if (chrome.runtime.lastError) {
-      authLog(`Impossible de sauvegarder le token en session storage: ${chrome.runtime.lastError.message}`, 'error');
-    } else {
-      authLog('Token sauvegardé en session storage pour récupération d\'urgence');
-    }
-  });
+  // Variables pour traquer les états de sauvegarde
+  let sessionSaveCompleted = false;
+  let localSaveCompleted = false;
   
-  // Sauvegarde dans le stockage local (persistant)
-  return new Promise((resolve) => {
-    chrome.storage.local.set({ 'authToken': token }, () => {
+  // Sauvegarde du token normalisé (pour éviter les problèmes d'incohérence dus aux espaces, etc.)
+  const normalizedToken = String(token).trim();
+  
+  // Sauvegarde dans chrome.storage.session pour une récupération rapide
+  const sessionPromise = new Promise(resolve => {
+    chrome.storage.session.set({'authTokenBackup': normalizedToken}, () => {
       if (chrome.runtime.lastError) {
-        authLog(`Erreur lors de l'enregistrement du token: ${chrome.runtime.lastError.message}`, 'error');
+        authLog(`Impossible de sauvegarder le token en session storage: ${chrome.runtime.lastError.message}`, 'error');
         resolve(false);
       } else {
-        authLog(`Token enregistré dans le stockage local: ${token.substring(0, 4)}...${token.substring(token.length-4)}`);
-        
-        // Vérification immédiate que le token est correctement stocké
-        setTimeout(() => {
-          chrome.storage.local.get(['authToken'], (result) => {
-            if (!result || !result.authToken) {
-              authLog('ALERTE: Token non trouvé dans le stockage après sauvegarde!', 'error');
-            } else if (result.authToken !== token) {
-              authLog(`ALERTE: Incohérence entre le token en mémoire et celui du stockage!`, 'error');
-            } else {
-              authLog('Vérification positive: token correctement enregistré et récupérable', 'debug');
-            }
-          });
-        }, 100);
-        
+        authLog('Token sauvegardé en session storage pour récupération d\'urgence');
+        sessionSaveCompleted = true;
         resolve(true);
       }
     });
   });
+  
+  // Sauvegarde dans le stockage local (persistant)
+  const localPromise = new Promise((resolve) => {
+    chrome.storage.local.set({ 'authToken': normalizedToken }, () => {
+      if (chrome.runtime.lastError) {
+        authLog(`Erreur lors de l'enregistrement du token: ${chrome.runtime.lastError.message}`, 'error');
+        resolve(false);
+      } else {
+        authLog(`Token enregistré dans le stockage local: ${normalizedToken.substring(0, 4)}...${normalizedToken.substring(normalizedToken.length-4)}`);
+        localSaveCompleted = true;
+        resolve(true);
+      }
+    });
+  });
+  
+  // Vérification de la cohérence après sauvegarde (avec délai pour laisser le temps aux opérations)
+  return Promise.all([sessionPromise, localPromise])
+    .then(([sessionSuccess, localSuccess]) => {
+      if (!sessionSuccess || !localSuccess) {
+        authLog('Alerte: Certaines opérations de sauvegarde ont échoué!', 'warn');
+      }
+      
+      // Attendre un peu puis vérifier la cohérence
+      setTimeout(() => {
+        // Vérification entre session et local storage
+        Promise.all([
+          new Promise(resolve => {
+            chrome.storage.session.get(['authTokenBackup'], result => {
+              resolve(result?.authTokenBackup);
+            });
+          }),
+          new Promise(resolve => {
+            chrome.storage.local.get(['authToken'], result => {
+              resolve(result?.authToken);
+            });
+          })
+        ]).then(([sessionToken, localToken]) => {
+          if (!sessionToken && !localToken) {
+            authLog('ALERTE: Aucun token trouvé dans les stockages après sauvegarde!', 'error');
+          } else if (sessionToken !== localToken) {
+            authLog(`ALERTE: Incohérence entre les tokens du session storage et du local storage!`, 'error');
+            // Tentative de réparation
+            const validToken = sessionToken || localToken;
+            if (validToken) {
+              authLog('Tentative de réparation des stockages...', 'warn');
+              Promise.all([
+                new Promise(resolve => chrome.storage.session.set({'authTokenBackup': validToken}, resolve)),
+                new Promise(resolve => chrome.storage.local.set({'authToken': validToken}, resolve))
+              ]).then(() => {
+                authLog('Réparation effectuée : tokens synchronisés dans les deux stockages', 'warn');
+              });
+            }
+          } else if (sessionToken !== normalizedToken) {
+            authLog(`ALERTE: Incohérence entre le token en mémoire et celui du stockage!`, 'error');
+            // Ne pas essayer de corriger ici, laisser le soin à handleTokenInconsistency() de résoudre
+          } else {
+            authLog('Vérification positive: tokens cohérents dans tous les stockages', 'debug');
+          }
+        });
+      }, 150); // Délai légèrement plus long pour s'assurer que les opérations async sont terminées
+      
+      return sessionSuccess && localSuccess;
+    });
 }
 
 /**

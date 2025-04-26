@@ -54,11 +54,20 @@ async function getBackupToken() {
 // Vérifie si le serveur est en ligne
 export async function checkServerOnline() {
   const apiUrl = getApiUrl();
-  const auth = getAuthHeaders();
   serverLog(`Vérification si le serveur est en ligne: ${apiUrl}/status`);
-  serverLog(`Headers d'authentification: ${JSON.stringify(auth)}`, 'debug');
   
   try {
+    // Récupérer les headers d'authentification de manière asynchrone
+    let auth;
+    try {
+      auth = await getAuthHeaders();
+    } catch (authError) {
+      serverLog(`Erreur lors de la récupération des headers d'authentification: ${authError.message}`, 'error');
+      auth = {}; // Utiliser un objet vide en cas d'erreur
+    }
+    
+    serverLog(`Headers d'authentification: ${JSON.stringify(auth)}`, 'debug');
+    
     // Vérification que l'authentification est marquée comme active si un token est présent
     if (auth.Authorization && !isServerConnected) {
       serverLog('Token présent mais statut serveur déconnecté, possible incohérence', 'warn');
@@ -73,36 +82,63 @@ export async function checkServerOnline() {
     
     serverLog(`Headers complets pour vérification serveur: ${JSON.stringify(headers)}`, 'debug');
     
-    const response = await fetch(`${apiUrl}/status`, {
-      method: 'GET',
-      headers: headers,
-      cache: 'no-cache', // IMPORTANT: Pas de cache
-      credentials: 'omit'  // Ne plus utiliser les cookies
-    });
+    // Ajouter un timeout pour éviter les attentes trop longues
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 secondes de timeout
     
-    serverLog(`Réponse du serveur: status=${response.status}`);
-    
-    // Si erreur 401 mais avec un token, c'est que le token est probablement expiré
-    if (response.status === 401 && auth.Authorization) {
-      serverLog('Erreur 401 avec token présent, possible token expiré ou invalide', 'warn');
+    try {
+      const response = await fetch(`${apiUrl}/status`, {
+        method: 'GET',
+        headers: headers,
+        cache: 'no-cache', // IMPORTANT: Pas de cache
+        credentials: 'omit',  // Ne plus utiliser les cookies
+        signal: controller.signal // Ajouter le signal pour le timeout
+      });
       
-      // Vérification de l'authentification
-      await checkAuthWithServer();
+      // Annuler le timeout car la requête a réussi
+      clearTimeout(timeoutId);
+      
+      serverLog(`Réponse du serveur: status=${response.status}`);
+      
+      // Si erreur 401 mais avec un token, c'est que le token est probablement expiré
+      if (response.status === 401 && auth.Authorization) {
+        serverLog('Erreur 401 avec token présent, possible token expiré ou invalide', 'warn');
+        
+        // Vérification de l'authentification
+        try {
+          await checkAuthWithServer();
+        } catch (authCheckError) {
+          serverLog(`Erreur lors de la vérification d'authentification: ${authCheckError.message}`, 'error');
+        }
+      }
+      
+      // Si on reçoit une réponse, le serveur est en ligne
+      const isOnline = response.ok || response.status === 304;
+      setServerStatus(isOnline);
+      
+      // Si authentification requise, on considère que le serveur est en ligne
+      if (response.status === 401) {
+        serverLog('Serveur en ligne mais authentification requise');
+        setServerStatus(true); // Le serveur est en ligne même si auth échouée
+      }
+      
+      return isOnline;
+    } catch (fetchError) {
+      // Annuler le timeout en cas d'erreur fetch
+      clearTimeout(timeoutId);
+      
+      // Vérifier si l'erreur est due au timeout
+      if (fetchError.name === 'AbortError') {
+        serverLog('Timeout lors de la connexion au serveur', 'error');
+      } else {
+        serverLog(`Erreur réseau lors de la vérification: ${fetchError.message}`, 'error');
+      }
+      
+      setServerStatus(false);
+      return false;
     }
-    
-    // Si on reçoit une réponse, le serveur est en ligne
-    const isOnline = response.ok || response.status === 304;
-    setServerStatus(isOnline);
-    
-    // Si authentification requise, on considère que le serveur est en ligne
-    if (response.status === 401) {
-      serverLog('Serveur en ligne mais authentification requise');
-      setServerStatus(true); // Le serveur est en ligne même si auth échouée
-    }
-    
-    return isOnline;
   } catch (error) {
-    serverLog(`Erreur lors de la vérification: ${error.message}`, 'error');
+    serverLog(`Exception générale lors de la vérification: ${error.message}`, 'error');
     setServerStatus(false);
     return false;
   }
@@ -113,15 +149,53 @@ export async function forceServerCheck() {
   serverLog('Vérification forcée du statut serveur');
   
   try {
+    // Récupérer le statut d'authentification avant de vérifier le serveur
+    const authStatus = getAuthStatus();
+    serverLog(`État d'authentification avant vérification: ${JSON.stringify(authStatus)}`);
+    
+    // Si on est supposé être authentifié mais qu'on n'a pas de token, tentative de récupération
+    if (authStatus.isAuthenticated && !authStatus.hasToken) {
+      serverLog('Incohérence détectée: authentifié sans token - récupération d\'urgence');
+      try {
+        await handleTokenInconsistency();
+      } catch (recoveryError) {
+        serverLog(`Erreur de récupération: ${recoveryError.message}`, 'error');
+      }
+    }
+    
+    // Vérification avec le serveur
     const isOnline = await checkServerOnline();
+    serverLog(`Résultat de la vérification: serveur ${isOnline ? 'en ligne' : 'déconnecté'}`);
     
     // Diffuser à nouveau l'état, même s'il n'a pas changé
-    chrome.runtime.sendMessage({ 
-      action: 'serverStatusChanged', 
-      status: { isConnected: isOnline } 
-    }, () => {
+    const broadcastMessage = () => {
+      chrome.runtime.sendMessage({ 
+        action: 'serverStatusChanged', 
+        status: { isConnected: isOnline } 
+      }, () => {
+        if (chrome.runtime.lastError) {
+          // Ne pas traiter comme critique - normal au démarrage
+          if (chrome.runtime.lastError.message.includes('Receiving end does not exist')) {
+            serverLog('Aucun récepteur pour le message (normal si popup fermé)', 'warn');
+          } else {
+            serverLog(`Diffusion forcée non délivrée: ${chrome.runtime.lastError.message}`, 'warn');
+          }
+        } else {
+          serverLog('Diffusion forcée délivrée avec succès');
+        }
+      });
+    };
+    
+    // Appel immédiat puis second appel décalé pour augmenter les chances de réception
+    broadcastMessage();
+    setTimeout(broadcastMessage, 500); // Second envoi après 500ms
+    
+    // Sauvegarder le statut dans le stockage local comme mécanisme de secours
+    chrome.storage.local.set({ 'serverStatus': { isConnected: isOnline } }, () => {
       if (chrome.runtime.lastError) {
-        serverLog('Diffusion forcée non délivrée', 'warn');
+        serverLog(`Impossible de sauvegarder le statut serveur: ${chrome.runtime.lastError.message}`, 'warn');
+      } else {
+        serverLog('Statut serveur sauvegardé dans le stockage local');
       }
     });
     
@@ -129,8 +203,14 @@ export async function forceServerCheck() {
   } catch (error) {
     serverLog(`Erreur lors de la vérification forcée: ${error.message}`, 'error');
     
-    // Tentative de récupération
+    // Journaliser la stack trace pour le débogage
+    if (error.stack) {
+      serverLog(`Stack trace: ${error.stack}`, 'debug');
+    }
+    
+    // Tentative de récupération par la méthode standard
     try {
+      serverLog('Tentative de récupération d\'urgence du token...');
       const backupToken = await getBackupToken();
       
       if (backupToken) {
@@ -138,19 +218,34 @@ export async function forceServerCheck() {
         await setToken(backupToken);
         serverLog('Token récupéré depuis la sauvegarde', 'warn');
         
+        // Attendre un court instant pour s'assurer que le token est défini
+        await new Promise(resolve => setTimeout(resolve, 50));
+        
         // Réessayer la vérification
         const retryOnline = await checkServerOnline();
         
-        chrome.runtime.sendMessage({ 
-          action: 'serverStatusChanged', 
-          status: { 
-            isConnected: retryOnline, 
-            recoveryAttempted: true 
-          } 
-        }, () => {
-          if (chrome.runtime.lastError) {
-            serverLog('Diffusion après récupération non délivrée', 'warn');
-          }
+        // Notification avancée avec tentative multiple
+        const notifyRecovery = () => {
+          chrome.runtime.sendMessage({ 
+            action: 'serverStatusChanged', 
+            status: { 
+              isConnected: retryOnline, 
+              recoveryAttempted: true 
+            } 
+          }, () => {
+            if (chrome.runtime.lastError) {
+              serverLog('Diffusion après récupération non délivrée', 'warn');
+            }
+          });
+        };
+        
+        // Double tentative de notification
+        notifyRecovery();
+        setTimeout(notifyRecovery, 300);
+        
+        // Sauvegarder également dans le stockage
+        chrome.storage.local.set({
+          'serverStatus': { isConnected: retryOnline, recoveryAttempted: true }
         });
         
         return retryOnline;
@@ -161,7 +256,13 @@ export async function forceServerCheck() {
         return false;
       }
     } catch (recoveryError) {
-      serverLog(`Erreur de récupération: ${recoveryError.message}`, 'error');
+      serverLog(`Erreur complète de récupération: ${recoveryError.message}`, 'error');
+      
+      // Sauvegarder l'état déconnecté dans le stockage
+      try {
+        chrome.storage.local.set({ 'serverStatus': { isConnected: false, error: true } });
+      } catch (e) { /* Ignorer */ }
+      
       return false;
     }
   }
