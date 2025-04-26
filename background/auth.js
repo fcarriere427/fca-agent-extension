@@ -43,12 +43,12 @@ export function setAuthenticated(status, token = null) {
   if (status && token) {
     authToken = token;
     
-    // Sauvegarde de secours en sessionStorage (pour récupération synchrone)
+    // Sauvegarde de secours en chrome.storage.session
     chrome.storage.session.set({'authTokenBackup': token}, () => {
       if (chrome.runtime.lastError) {
-        logger.error(FILE_NAME, `Impossible de sauvegarder le token en session storage: ${chrome.runtime.lastError.message}`);
+        logger.error(`Impossible de sauvegarder le token en session storage: ${chrome.runtime.lastError.message}`);
       } else {
-        logger.log(FILE_NAME, `Token sauvegardé en session storage pour récupération d'urgence`);
+        logger.log(`Token sauvegardé en session storage pour récupération d'urgence`);
       }
     });
     
@@ -162,9 +162,12 @@ export async function loginToServer(password) {
     authToken = debugToken;
     isAuthenticated = true;
     
-    try {
-      window.sessionStorage.setItem('authTokenBackup', debugToken);
-    } catch (e) {}
+    // Sauvegarde du token de debug dans chrome.storage.session
+    chrome.storage.session.set({'authTokenBackup': debugToken}, () => {
+      if (chrome.runtime.lastError) {
+        logger.warn(`Impossible de sauvegarder le token de debug: ${chrome.runtime.lastError.message}`);
+      }
+    });
     
     // Notification
     broadcastAuthStatus();
@@ -178,13 +181,14 @@ export async function loginToServer(password) {
   if (result.success) {
     const token = result.token;
     
-    // 1. D'abord, sauvegarder dans la session storage pour accès immédiat
-    try {
-      window.sessionStorage.setItem('authTokenBackup', token);
-      logger.log('Token sauvegardé en session storage (sauvegarde rapide)');
-    } catch (e) {
-      logger.warn(`Impossible de sauvegarder en session storage: ${e.message}`);
-    }
+    // 1. D'abord, sauvegarder dans chrome.storage.session pour accès
+    chrome.storage.session.set({'authTokenBackup': token}, () => {
+      if (chrome.runtime.lastError) {
+        logger.warn(`Impossible de sauvegarder le token en session storage: ${chrome.runtime.lastError.message}`);
+      } else {
+        logger.log('Token sauvegardé en session storage (sauvegarde rapide)');
+      }
+    });
     
     // 2. Stockage explicite du token dans le storage local (persistant)
     try {
@@ -239,14 +243,20 @@ export async function checkAuthWithServer() {
     logger.error('ERREUR CRITIQUE: Marqué comme authentifié mais aucun token disponible!');
     
     // Essayer de récupérer depuis le stockage de secours
-    const backupToken = await getSessionToken();
-    if (backupToken) {
-      logger.warn('Récupération du token depuis le stockage de secours');
-      authToken = backupToken;
-      return checkAuthWithServer(); // Réessayer avec le token récupéré
-    } else {
-      // Pas de sauvegarde disponible non plus
-      logger.error('Aucun token de sauvegarde disponible, déconnexion forcée');
+    try {
+      const backupToken = await getSessionToken();
+      if (backupToken) {
+        logger.warn('Récupération du token depuis le stockage de secours');
+        authToken = backupToken;
+        return checkAuthWithServer(); // Réessayer avec le token récupéré
+      } else {
+        // Pas de sauvegarde disponible non plus
+        logger.error('Aucun token de sauvegarde disponible, déconnexion forcée');
+        resetAuthentication();
+        return false;
+      }
+    } catch (error) {
+      logger.error(`Erreur lors de la récupération du token de secours: ${error.message}`);
       resetAuthentication();
       return false;
     }

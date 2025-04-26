@@ -13,13 +13,14 @@ export function saveTokenToStorage(token) {
     return Promise.resolve(false);
   }
   
-  // Sauvegarde dans sessionStorage pour une récupération rapide
-  try {
-    window.sessionStorage.setItem('authTokenBackup', token);
-    authLog('Token sauvegardé en session storage pour récupération d\'urgence');
-  } catch (e) {
-    authLog(`Impossible de sauvegarder le token en session storage: ${e.message}`, 'error');
-  }
+  // Sauvegarde dans chrome.storage.session pour une récupération rapide
+  chrome.storage.session.set({'authTokenBackup': token}, () => {
+    if (chrome.runtime.lastError) {
+      authLog(`Impossible de sauvegarder le token en session storage: ${chrome.runtime.lastError.message}`, 'error');
+    } else {
+      authLog('Token sauvegardé en session storage pour récupération d\'urgence');
+    }
+  });
   
   // Sauvegarde dans le stockage local (persistant)
   return new Promise((resolve) => {
@@ -63,13 +64,14 @@ export function loadTokenFromStorage() {
         const token = result.authToken;
         authLog(`Token chargé depuis le stockage: ${token.substring(0, 4)}...${token.substring(token.length-4)}`);
         
-        // Sauvegarde de secours en sessionStorage pour récupération synchrone future
-        try {
-          window.sessionStorage.setItem('authTokenBackup', token);
-          authLog('Token sauvegardé en session storage après chargement');
-        } catch (e) {
-          authLog(`Impossible de sauvegarder le token en session storage: ${e.message}`, 'error');
-        }
+        // Sauvegarde de secours en chrome.storage.session pour récupération future
+        chrome.storage.session.set({'authTokenBackup': token}, () => {
+          if (chrome.runtime.lastError) {
+            authLog(`Impossible de sauvegarder le token en session storage: ${chrome.runtime.lastError.message}`, 'error');
+          } else {
+            authLog('Token sauvegardé en session storage après chargement');
+          }
+        });
         
         resolve(token);
       } else {
@@ -85,15 +87,9 @@ export function loadTokenFromStorage() {
  * @returns {string|null} - Token de secours ou null
  */
 export function getBackupToken() {
-  try {
-    const token = window.sessionStorage.getItem('authTokenBackup');
-    if (token) {
-      authLog('Token récupéré depuis la sauvegarde en session storage', 'debug');
-      return token;
-    }
-  } catch (e) {
-    authLog(`Erreur lors de la récupération du token de session: ${e.message}`, 'error');
-  }
+  // Cette fonction doit maintenant retourner une promesse car chrome.storage est asynchrone
+  // Pour compatibilité avec le code existant, nous retournons null immédiatement
+  authLog('getBackupToken() appelé - cette méthode est obsolète, utilisez getSessionToken() à la place', 'warn');
   return null;
 }
 
@@ -122,13 +118,8 @@ export function getSessionToken() {
  * @returns {Promise<boolean>} - Résultat de l'opération
  */
 export function clearTokenFromStorage() {
-  // Nettoyer la sauvegarde en session storage
-  try {
-    window.sessionStorage.removeItem('authTokenBackup');
-    authLog('Token supprimé de la session storage');
-  } catch (e) {
-    authLog(`Erreur lors de la suppression du token de session: ${e.message}`, 'warn');
-  }
+  // Nettoyer la sauvegarde en chrome.storage.session
+  // Cette partie est déjà gérée par le code qui suit
   
   // Nettoyer le chrome.storage.session
   chrome.storage.session.remove('authTokenBackup', () => {
