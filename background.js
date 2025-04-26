@@ -1,7 +1,16 @@
 // FCA-Agent - Background Service Worker (version refactorisée)
 
-import { loadInitialConfig, setDefaultConfig } from './background/config.js';
-import { loadAuthState, getAuthStatus, checkAuthWithServer } from './background/auth.js';
+import { loadInitialConfig, setDefaultConfig, getApiUrl } from './background/config.js';
+import { 
+  loadAuthState, 
+  getAuthStatus, 
+  checkAuthWithServer, 
+  getAuthHeaders,
+  getAuthHeadersSync,
+  handleTokenInconsistency,
+  setToken,
+  resetAuthentication
+} from './background/auth.js';
 import { setupMessageHandlers } from './background/handlers.js';
 import { checkServerOnline, getServerStatus, forceServerCheck } from './background/server.js';
 import { createModuleLogger } from './utils/logger.js';
@@ -51,12 +60,12 @@ async function verifySystemIntegrity(authStatus) {
         }
         
         try {
-          const authModule = await import('./background/auth.js');
-          // Utilisation de la nouvelle version asynchrone de getAuthHeaders
-          authHeaders = await authModule.getAuthHeaders();
+          // Utilisation directe de getAuthHeaders (importé statiquement)
+          const headers = await getAuthHeaders();
           
-          if (authHeaders && authHeaders.Authorization) {
+          if (headers && headers.Authorization) {
             logger.log(`Headers d'authentification obtenus après ${headerAttempts + 1} tentative(s)`);
+            authHeaders = headers;
             break;
           } else {
             logger.warn(`Tentative ${headerAttempts + 1}/${maxHeaderAttempts}: headers incomplets, nouvel essai...`);
@@ -73,13 +82,13 @@ async function verifySystemIntegrity(authStatus) {
         
         // Tentative de récupération d'urgence
         try {
-          const authModule = await import('./background/auth.js');
-          const recovered = await authModule.handleTokenInconsistency();
+          // Utilisation directe de handleTokenInconsistency (importé statiquement)
+          const recovered = await handleTokenInconsistency();
           
           if (recovered) {
             logger.warn('Récupération d\'urgence réussie, système restauré');
             // Vérification que la récupération a fonctionné
-            const newHeaders = await authModule.getAuthHeaders();
+            const newHeaders = await getAuthHeaders();
             if (newHeaders && newHeaders.Authorization) {
               logger.log('Cohérence restaurée après récupération');
               isSystemConsistent = true;
@@ -103,8 +112,8 @@ async function verifySystemIntegrity(authStatus) {
   
   // 2. Vérification de la configuration
   try {
-    const configModule = await import('./background/config.js');
-    const apiUrl = configModule.getApiUrl();
+    // Utilisation directe de getApiUrl (importé statiquement)
+    const apiUrl = getApiUrl();
     
     if (!apiUrl) {
       logger.error('ALERTE: URL de l\'API non définie ou invalide!');
@@ -147,8 +156,8 @@ async function initializeAuth() {
       
       // Vérification des headers pour s'assurer que le token est disponible
       try {
-        const authModule = await import('./background/auth.js');
-        const headers = await authModule.getAuthHeaders();
+        // Utilisation directe de getAuthHeaders (importé statiquement)
+        const headers = await getAuthHeaders();
         
         if (!headers.Authorization) {
           logger.error('ALERTE: Token manquant dans les headers alors que marqué comme authentifié!');
@@ -157,11 +166,11 @@ async function initializeAuth() {
             chrome.storage.local.get(['authToken'], async (result) => {
               if (result && result.authToken) {
                 logger.log(`Token trouvé dans le stockage: ${result.authToken.substring(0, 4)}...${result.authToken.substring(result.authToken.length-4)}`);
-                await authModule.setToken(result.authToken);
+                await setToken(result.authToken);
                 resolve(true);
               } else {
                 logger.error('Aucun token trouvé dans le stockage, déconnexion forcée');
-                await authModule.resetAuthentication();
+                await resetAuthentication();
                 resolve(false);
               }
             });
@@ -300,8 +309,8 @@ async function initialize() {
         logger.log('Vérification forcée #2 après initialisation');
         try {
           // Nouvelle vérification d'intégrité
-          const authModule = await import('./background/auth.js');
-          const currentAuthStatus = authModule.getAuthStatus();
+          // Utilisation directe de getAuthStatus (importé statiquement)
+          const currentAuthStatus = getAuthStatus();
           await verifySystemIntegrity(currentAuthStatus);
           
           // Vérification du serveur
@@ -403,28 +412,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     
     const fullSystemCheck = async () => {
       try {
-        const authModule = await import('./background/auth.js');
-        const serverModule = await import('./background/server.js');
-        
-        const authStatus = authModule.getAuthStatus();
-        const serverStatus = serverModule.getServerStatus();
+        // Utilisation directe des fonctions importées statiquement
+        const authStatus = getAuthStatus();
+        const serverStatus = getServerStatus();
         
         // Vérifications complètes
         let authCheck = false;
         if (authStatus.isAuthenticated) {
           try {
-            authCheck = await authModule.checkAuthWithServer();
+            authCheck = await checkAuthWithServer();
           } catch (authError) {
             logger.error(`Erreur lors de la vérification d'authentification: ${authError.message}`);
           }
         }
         
-        const serverCheck = await serverModule.forceServerCheck();
+        const serverCheck = await forceServerCheck();
         
         // Tentative de récupération si nécessaire
         if (authStatus.isAuthenticated && !authCheck) {
           try {
-            await authModule.handleTokenInconsistency();
+            await handleTokenInconsistency();
           } catch (recoveryError) {
             logger.error(`Erreur lors de la tentative de récupération: ${recoveryError.message}`);
           }
