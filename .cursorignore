@@ -1,0 +1,8 @@
+# Ignore all files containing 'keys' in filename
+*keys*
+
+# Ignore `dist` directory and all files inside
+# dist/
+
+# Ignore all files with a `.log` extension
+#*.log
