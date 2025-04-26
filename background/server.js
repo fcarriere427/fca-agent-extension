@@ -1,7 +1,7 @@
 // FCA-Agent - Module de communication avec le serveur
 
 import { getApiUrl } from './config.js';
-import { getAuthHeaders, setAuthenticated } from './auth.js';
+import { getAuthHeaders, setAuthenticated, getAuthStatus, checkAuthWithServer, resetAuthentication, setToken } from './auth.js';
 
 // État de connexion au serveur
 let isServerConnected = false;
@@ -65,6 +65,17 @@ export function setServerStatus(status) {
   }
 }
 
+// Méthode pour récupérer le token de sauvegarde de manière sécurisée
+async function getBackupToken() {
+  return new Promise((resolve) => {
+    chrome.storage.session.get(['authTokenBackup'], (result) => {
+      const backupToken = result.authTokenBackup || null;
+      serverLog(`Récupération du token de sauvegarde: ${backupToken ? 'Token trouvé' : 'Aucun token'}`, 'debug');
+      resolve(backupToken);
+    });
+  });
+}
+
 // Vérifie si le serveur est en ligne
 export async function checkServerOnline() {
   const apiUrl = getApiUrl();
@@ -96,26 +107,12 @@ export async function checkServerOnline() {
     
     serverLog(`Réponse du serveur: status=${response.status}`);
     
-    // Tenter de lire le corps de la réponse pour le débogage
-    let responseText = '';
-    let responseData = null;
-    try {
-      responseData = await response.json();
-      responseText = JSON.stringify(responseData);
-      serverLog(`Corps de la réponse: ${responseText}`, 'debug');
-    } catch (e) {
-      // Ignorer les erreurs de parsing
-      serverLog('Pas de contenu JSON dans la réponse', 'debug');
-    }
-    
     // Si erreur 401 mais avec un token, c'est que le token est probablement expiré
     if (response.status === 401 && auth.Authorization) {
       serverLog('Erreur 401 avec token présent, possible token expiré ou invalide', 'warn');
       
-      // Notifier le module d'auth pour vérification
-      import('./auth.js').then(authModule => {
-        authModule.checkAuthWithServer().catch(() => {});
-      });
+      // Vérification de l'authentification
+      await checkAuthWithServer();
     }
     
     // Si on reçoit une réponse, le serveur est en ligne
@@ -159,26 +156,35 @@ export async function forceServerCheck() {
     
     // Tentative de récupération
     try {
-      // Importer dynamiquement pour éviter les dépendances circulaires
-      const authModule = await import('./auth.js');
-      await authModule.handleTokenInconsistency();
+      const backupToken = await getBackupToken();
       
-      // Réessayer la vérification
-      const retryOnline = await checkServerOnline();
-      
-      chrome.runtime.sendMessage({ 
-        action: 'serverStatusChanged', 
-        status: { 
-          isConnected: retryOnline, 
-          recoveryAttempted: true 
-        } 
-      }, () => {
-        if (chrome.runtime.lastError) {
-          serverLog('Diffusion après récupération non délivrée', 'warn');
-        }
-      });
-      
-      return retryOnline;
+      if (backupToken) {
+        // Récupération avec le token de sauvegarde
+        await setToken(backupToken);
+        serverLog('Token récupéré depuis la sauvegarde', 'warn');
+        
+        // Réessayer la vérification
+        const retryOnline = await checkServerOnline();
+        
+        chrome.runtime.sendMessage({ 
+          action: 'serverStatusChanged', 
+          status: { 
+            isConnected: retryOnline, 
+            recoveryAttempted: true 
+          } 
+        }, () => {
+          if (chrome.runtime.lastError) {
+            serverLog('Diffusion après récupération non délivrée', 'warn');
+          }
+        });
+        
+        return retryOnline;
+      } else {
+        // Pas de token de sauvegarde
+        await resetAuthentication();
+        serverLog('Aucun token de sauvegarde, réinitialisation', 'error');
+        return false;
+      }
     } catch (recoveryError) {
       serverLog(`Erreur de récupération: ${recoveryError.message}`, 'error');
       return false;
@@ -200,30 +206,21 @@ export async function executeTaskOnServer(taskType, taskData) {
     serverLog('ERREUR CRITIQUE: Tentative d\'exécution de tâche sécurisée sans token!', 'error');
     
     // Vérifier si l'authentification est marquée comme active mais sans token
-    const authModule = await import('./auth.js');
-    if (authModule.getAuthStatus().isAuthenticated) {
+    const authStatus = getAuthStatus();
+    if (authStatus.isAuthenticated) {
       serverLog('Incohérence: authentifié sans token disponible, tentative de récupération', 'warn');
       
       // Tenter une récupération d'urgence
-      try {
-        const backupToken = await new Promise((resolve) => {
-          chrome.storage.session.get(['authTokenBackup'], (result) => {
-            resolve(result.authTokenBackup || null);
-          });
-        });
-        
-        if (backupToken) {
-          // Récupération manuelle depuis la sauvegarde
-          await authModule.setToken(backupToken);
-          serverLog('Token récupéré depuis la sauvegarde d\'urgence', 'warn');
-        } else {
-          // Pas de token de sauvegarde, réinitialiser l'authentification
-          await authModule.resetAuthentication();
-          serverLog('Aucun token de sauvegarde disponible, réinitialisation de l\'authentification', 'error');
-          throw new Error('Authentification requise pour cette action');
-        }
-      } catch (e) {
-        serverLog(`Erreur lors de la récupération du token: ${e.message}`, 'error');
+      const backupToken = await getBackupToken();
+      
+      if (backupToken) {
+        // Récupération manuelle depuis la sauvegarde
+        await setToken(backupToken);
+        serverLog('Token récupéré depuis la sauvegarde d\'urgence', 'warn');
+      } else {
+        // Pas de token de sauvegarde
+        await resetAuthentication();
+        serverLog('Aucun token de sauvegarde disponible, réinitialisation', 'error');
         throw new Error('Authentification requise pour cette action');
       }
     } else {
@@ -256,9 +253,8 @@ export async function executeTaskOnServer(taskType, taskData) {
       // Authentification échouée ou token manquant/invalide
       serverLog('Authentification échouée, déconnexion forcée', 'warn');
       
-      // Utiliser import() pour éviter les dépendances circulaires
-      const authModule = await import('./auth.js');
-      authModule.resetAuthentication();
+      // Déconnexion et notification
+      await resetAuthentication();
       
       throw new Error('Session expirée ou invalide, veuillez vous reconnecter');
     }
