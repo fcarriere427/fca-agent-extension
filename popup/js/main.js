@@ -2,8 +2,8 @@
 
 import { checkAuthOnce, handleLogout } from './auth.js';
 import { initStatusIndicators } from './status.js';
-import { setupMessageHandlers } from '../../background/handlers.js';
-import { setupTaskHandlers } from './task-handlers.js';  // Chemin corrigé
+import { setupMessageHandlers } from '../../background/handlers-consolidated.js';
+import { setupTaskHandlers } from './task-handlers.js';
 import { initUI } from './ui.js';
 import { mainLog } from './main-logger.js';
 
@@ -11,7 +11,6 @@ document.addEventListener('DOMContentLoaded', () => {
   mainLog('Initialisation du popup UI...');
   
   // Référence aux éléments UI principaux
-  const authIndicator = document.getElementById('auth-indicator');
   const serverIndicator = document.getElementById('server-indicator');
   
   // Vérification de l'authentification avant d'initialiser l'UI
@@ -21,12 +20,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialiser les gestionnaires de messages
     setupMessageHandlers();
     
-    // Initialiser les indicateurs de statut
-    if (authIndicator && serverIndicator) {
-      initStatusIndicators(authIndicator, serverIndicator);
-      mainLog('Indicateurs de statut initialisés');
+    // Initialiser l'indicateur de statut
+    if (serverIndicator) {
+      initStatusIndicators(null, serverIndicator);
+      mainLog('Indicateur de statut initialisé');
     } else {
-      mainLog('Indicateurs de statut non trouvés dans le DOM', 'error');
+      mainLog('Indicateur de statut non trouvé dans le DOM', 'error');
     }
     
     // Initialiser l'interface utilisateur générale

@@ -1,4 +1,4 @@
-// FCA-Agent - Module de communication avec le serveur (version simplifiée avec clé API fixe)
+// FCA-Agent - Module de communication avec le serveur (consolidé)
 
 import { getApiUrl } from './config.js';
 import { getAuthHeaders, isAuthConfigured } from './auth-headers.js';
@@ -10,7 +10,8 @@ let serverStatus = {
   authValid: null,     // Clé API valide (null si inconnu)
   statusCode: null,    // Code HTTP pour diagnostic
   lastCheck: null,     // Horodatage de la dernière vérification
-  timeout: false       // Indique si la dernière requête a expiré
+  timeout: false,      // Indique si la dernière requête a expiré
+  error: false         // Indique s'il y a eu une erreur
 };
 
 // Méthodes d'accès à l'état du serveur
@@ -58,7 +59,7 @@ export function setServerStatus(newStatus) {
       }, (response) => {
         // Ignorer toute erreur (comme "Receiving end does not exist")
         if (chrome.runtime.lastError) {
-          serverLog('Message serverStatusChanged non délivré (normal au démarrage)', 'warn');
+          serverLog('Message serverStatusChanged non délivré (normal au démarrage)', 'debug'); // Changer 'warn' en 'debug'
         } else if (response && response.acknowledged) {
           // Message acquitté par au moins un récepteur
           serverLog('Notification de statut acquittée');
@@ -109,7 +110,9 @@ export async function checkServerOnline() {
         setServerStatus({
           isConnected: true,
           authValid: true,
-          statusCode: response.status
+          statusCode: response.status,
+          error: false,
+          timeout: false
         });
         return true;
       } else if (response.status === 401 || response.status === 403) {
@@ -118,7 +121,9 @@ export async function checkServerOnline() {
         setServerStatus({
           isConnected: true,
           authValid: false,
-          statusCode: response.status
+          statusCode: response.status,
+          error: false,
+          timeout: false
         });
         return true; // Le serveur est en ligne même si auth échouée
       } else {
@@ -127,7 +132,9 @@ export async function checkServerOnline() {
         setServerStatus({
           isConnected: true,
           authValid: null, // Inconnu
-          statusCode: response.status
+          statusCode: response.status,
+          error: true,
+          timeout: false
         });
         return true;
       }
@@ -143,6 +150,7 @@ export async function checkServerOnline() {
           isConnected: false,
           authValid: null,
           statusCode: null,
+          error: true,
           timeout: true
         });
       } else {
@@ -152,6 +160,7 @@ export async function checkServerOnline() {
           isConnected: false,
           authValid: null,
           statusCode: null,
+          error: true,
           timeout: false
         });
       }
@@ -163,7 +172,7 @@ export async function checkServerOnline() {
       isConnected: false,
       authValid: null,
       statusCode: null,
-      error: true,  // Marquer qu'il y a eu une erreur
+      error: true,
       timeout: false
     });
     return false;
@@ -199,7 +208,7 @@ export async function forceServerCheck() {
       }, (response) => {
         if (chrome.runtime.lastError) {
           // Ne pas traiter comme critique - normal au démarrage
-          serverLog('Message serverStatusChanged non délivré (normal au démarrage)', 'warn');
+          serverLog('Message serverStatusChanged non délivré (normal au démarrage)', 'debug');
         } else if (response && response.acknowledged) {
           // Message acquitté par au moins un récepteur
           serverLog('Notification forcée acquittée');
@@ -233,7 +242,8 @@ export async function forceServerCheck() {
         authValid: null, 
         statusCode: null,
         error: true,
-        lastCheck: Date.now() 
+        lastCheck: Date.now(),
+        timeout: false
       }});
     } catch (e) { /* Ignorer */ }
     
@@ -276,7 +286,9 @@ export async function executeTaskOnServer(taskType, taskData) {
       setServerStatus({
         isConnected: true,
         authValid: true,
-        statusCode: response.status
+        statusCode: response.status,
+        error: false,
+        timeout: false
       });
     } else if (response.status === 401 || response.status === 403) {
       // Authentification échouée (clé API invalide)
@@ -284,7 +296,9 @@ export async function executeTaskOnServer(taskType, taskData) {
       setServerStatus({
         isConnected: true,
         authValid: false,
-        statusCode: response.status
+        statusCode: response.status,
+        error: false,
+        timeout: false
       });
       throw new Error('Clé API invalide ou non acceptée par le serveur');
     } else {
@@ -292,7 +306,9 @@ export async function executeTaskOnServer(taskType, taskData) {
       setServerStatus({
         isConnected: true,
         authValid: null,
-        statusCode: response.status
+        statusCode: response.status,
+        error: true,
+        timeout: false
       });
     }
     

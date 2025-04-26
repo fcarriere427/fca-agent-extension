@@ -1,13 +1,13 @@
-// FCA-Agent - Module de gestion des messages simplifié avec clé API fixe
+// FCA-Agent - Module de gestion des messages (consolidé)
 
 import { getApiUrl, setApiUrl } from './config.js';
 import { getAuthHeaders, isAuthConfigured } from './auth-headers.js';
-import { getServerStatus, checkServerOnline, executeTaskOnServer, forceServerCheck } from './server-simplified.js';
+import { getServerStatus, checkServerOnline, executeTaskOnServer, forceServerCheck } from './server-consolidated.js';
 import { handlerLog } from './handlers-logger.js';
 
 // Gestionnaire principal de messages
 export function setupMessageHandlers() {
-  handlerLog('Configuration des gestionnaires de messages (version simplifiée)');
+  handlerLog('Configuration des gestionnaires de messages (consolidés)');
   
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const source = sender.tab ? 'content script' : 'popup';
@@ -20,7 +20,7 @@ export function setupMessageHandlers() {
         break;
         
       case 'getAuthStatus':
-        // Désormais, on réutilise simplement le statut du serveur pour éviter la duplication
+        // On réutilise simplement le statut du serveur pour éviter la duplication
         const serverStatus = getServerStatus();
         const authStatus = {
           isAuthenticated: serverStatus.authValid === true,
@@ -48,7 +48,7 @@ export function setupMessageHandlers() {
         break;
         
       case 'login':
-        // Simuler login pour rétrocompatibilité (clé API fixe, toujours authentifié)
+        // Simuler login pour clé API fixe
         handlerLog(`Login automatique avec clé API fixe`);
         sendResponse({ 
           success: true, 
@@ -57,13 +57,13 @@ export function setupMessageHandlers() {
         break;
         
       case 'logout':
-        // Simuler logout pour rétrocompatibilité (ne fait rien)
+        // Simuler logout pour clé API fixe (ne fait rien)
         handlerLog(`Déconnexion simulée (n'a aucun effet avec une clé API fixe)`);
         sendResponse({ success: true, message: 'Déconnexion simulée' });
         break;
         
       case 'checkAuthentication':
-        // Avec une clé API fixe, l'authentification est toujours valide
+        // Avec une clé API fixe, l'authentification est toujours valide si configurée
         handlerLog('Vérification d\'authentification (clé API fixe)');
         sendResponse({ authenticated: isAuthConfigured() });
         break;
@@ -128,7 +128,9 @@ async function handleGetStatus(sendResponse) {
       authenticated: fullStatus.authValid === true,
       authValid: fullStatus.authValid,  // Ajouter nouvelle propriété
       statusCode: fullStatus.statusCode,  // Ajouter code de statut
-      lastCheck: fullStatus.lastCheck  // Ajouter timestamp
+      lastCheck: fullStatus.lastCheck,    // Ajouter timestamp
+      error: fullStatus.error,           // Ajouter indicateur d'erreur
+      timeout: fullStatus.timeout       // Ajouter indicateur de timeout
     };
     
     handlerLog(`handleGetStatus => ${JSON.stringify(response)}`);
@@ -139,7 +141,8 @@ async function handleGetStatus(sendResponse) {
       status: 'disconnected', 
       authenticated: false,
       authValid: null,
-      error: error.message 
+      error: true,
+      message: error.message 
     });
   }
 }
@@ -171,10 +174,15 @@ async function handleCheckServerOnline(sendResponse) {
   try {
     const isOnline = await checkServerOnline();
     handlerLog(`Serveur en ligne: ${isOnline}`);
-    sendResponse({ isConnected: isOnline });
+    sendResponse({ isConnected: isOnline, ...getServerStatus() });
   } catch (error) {
     handlerLog(`Erreur lors de la vérification du serveur: ${error.message}`, 'error');
-    sendResponse({ isConnected: false, error: error.message });
+    sendResponse({ 
+      isConnected: false, 
+      error: true, 
+      message: error.message,
+      ...getServerStatus()
+    });
   }
 }
 
@@ -184,9 +192,19 @@ async function handleForceServerCheck(sendResponse) {
   try {
     const isOnline = await forceServerCheck();
     handlerLog(`Force check: Serveur en ligne: ${isOnline}`);
-    sendResponse({ isConnected: isOnline, forced: true });
+    sendResponse({ 
+      isConnected: isOnline, 
+      forced: true,
+      ...getServerStatus()
+    });
   } catch (error) {
     handlerLog(`Erreur lors de la vérification forcée: ${error.message}`, 'error');
-    sendResponse({ isConnected: false, error: error.message });
+    sendResponse({ 
+      isConnected: false, 
+      error: true, 
+      forced: true,
+      message: error.message,
+      ...getServerStatus()
+    });
   }
 }

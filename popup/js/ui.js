@@ -6,19 +6,19 @@ import { processUserInput } from './tasks/generalTasks.js';
 import { uiLog } from './ui-logger.js';
 
 // Référence aux éléments de l'interface
-let userInput;
-let submitBtn;
 let quickTaskButtons;
 
 /**
  * Initialise les références aux éléments de l'interface
- * @param {Object} elements - Éléments DOM à initialiser
  */
-export function initUI(elements) {
+export function initUI() {
   uiLog('Initialisation de l\'interface utilisateur');
-  userInput = elements.userInput;
-  submitBtn = elements.submitBtn;
-  quickTaskButtons = elements.quickTaskButtons;
+  
+  // Pour les boutons de tâches rapides, on les sélectionne tous
+  quickTaskButtons = document.querySelectorAll('.task-btn');
+  
+  // Configurer l'interface utilisateur
+  setupUI();
 }
 
 /**
@@ -26,19 +26,9 @@ export function initUI(elements) {
  */
 export function setupUI() {
   uiLog('Configuration de l\'interface utilisateur');
-  // Gestionnaire pour soumettre l'entrée utilisateur
-  submitBtn.addEventListener('click', () => {
-    processUserInput(userInput.value.trim());
-    userInput.value = '';
-  });
   
-  // Gestionnaire pour soumettre avec Entrée
-  userInput.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') {
-      processUserInput(userInput.value.trim());
-      userInput.value = '';
-    }
-  });
+  // Dans cette version simplifiée, nous n'avons pas de zone de saisie ni de bouton de soumission
+  // donc nous ne configurons pas ces éléments
   
   // Ajouter un bouton de déconnexion dans le header
   const header = document.querySelector('header');
@@ -49,7 +39,7 @@ export function setupUI() {
   logoutBtn.addEventListener('click', handleLogout);
   header.appendChild(logoutBtn);
   
-  // Style pour le bouton déconnexion
+  // Styles pour le bouton déconnexion
   const style = document.createElement('style');
   style.textContent = `
     #logout-btn {
@@ -73,13 +63,18 @@ export function setupUI() {
   uiLog('Styles de l\'interface utilisateur appliqués');
   
   // Gestionnaires pour les boutons d'actions rapides
-  quickTaskButtons.forEach(button => {
-    button.addEventListener('click', () => {
-      const taskType = button.getAttribute('data-task');
-      uiLog(`Bouton d'action rapide cliqué: ${taskType}`);
-      executeQuickTask(taskType);
+  if (quickTaskButtons && quickTaskButtons.length > 0) {
+    quickTaskButtons.forEach(button => {
+      button.addEventListener('click', () => {
+        const taskType = button.getAttribute('data-task');
+        uiLog(`Bouton d'action rapide cliqué: ${taskType}`);
+        executeQuickTask(taskType);
+      });
     });
-  });
+    uiLog(`${quickTaskButtons.length} boutons d'actions rapides configurés`);
+  } else {
+    uiLog('Aucun bouton d\'action rapide trouvé', 'warn');
+  }
   
   uiLog('Configuration de l\'interface utilisateur terminée');
   // La gestion des indicateurs est désormais déléguée au module status.js

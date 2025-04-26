@@ -1,4 +1,17 @@
-// FCA-Agent - Module de gestion des messages
+      case 'serverStatusChanged':
+        // Gestion passive des notifications de changement d'état
+        // Ce message est normalement utilisé pour la notification et n'attend pas de réponse
+        handlerLog(`Action de notification serverStatusChanged reçue et acceptée silencieusement`);
+        // On peut optionnellement envoyer une réponse vide pour éviter les warnings
+        sendResponse({acknowledged: true});
+        break;
+        
+      case 'authStatusChanged':
+        // Gestion passive des notifications de changement d'état d'authentification
+        handlerLog(`Action de notification authStatusChanged reçue et acceptée silencieusement`);
+        // On peut optionnellement envoyer une réponse vide pour éviter les warnings
+        sendResponse({acknowledged: true});
+        break;// FCA-Agent - Module de gestion des messages
 
 import { getApiUrl, setApiUrl } from './config.js';
 import { getAuthStatus, loginToServer, logoutFromServer, checkAuthWithServer } from './auth.js';
@@ -73,6 +86,21 @@ export function setupMessageHandlers() {
         };
         handlerLog(`getAuthAndServerStatus => ${JSON.stringify(combinedStatus)}`);
         sendResponse(combinedStatus);
+        break;
+        
+      case 'serverStatusChanged':
+        // Gestion passive des notifications de changement d'état
+        // Ce message est normalement utilisé pour la notification et n'attend pas de réponse
+        handlerLog(`Action de notification serverStatusChanged reçue et acceptée silencieusement`);
+        // On peut optionnellement envoyer une réponse vide pour éviter les warnings
+        sendResponse({acknowledged: true});
+        break;
+        
+      case 'authStatusChanged':
+        // Gestion passive des notifications de changement d'état d'authentification
+        handlerLog(`Action de notification authStatusChanged reçue et acceptée silencieusement`);
+        // On peut optionnellement envoyer une réponse vide pour éviter les warnings
+        sendResponse({acknowledged: true});
         break;
         
       default:
