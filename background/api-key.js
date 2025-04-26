@@ -2,7 +2,7 @@
 
 // Clé API fixe pour l'authentification avec le serveur
 // Cette clé doit correspondre exactement à celle configurée dans le fichier .env du serveur
-export const API_KEY = 'fca-agent-fixed-api-key-12345';
+export const API_KEY = 'test pour git';
 
 // Fonction utilitaire pour récupérer la clé API
 export function getApiKey() {
