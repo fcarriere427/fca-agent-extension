@@ -1,8 +1,1 @@
-# Ignore all files containing 'key' in filename
-*key*
-
-# Ignore `dist` directory and all files inside
-# dist/
-
-# Ignore all files with a `.log` extension
-#*.log
+api-key.js
