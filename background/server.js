@@ -139,19 +139,51 @@ export async function checkServerOnline() {
 // Force une vérification et une diffusion du statut
 export async function forceServerCheck() {
   serverLog('Vérification forcée du statut serveur');
-  const isOnline = await checkServerOnline();
   
-  // Diffuser à nouveau l'état, même s'il n'a pas changé
-  chrome.runtime.sendMessage({ 
-    action: 'serverStatusChanged', 
-    status: { isConnected: isOnline } 
-  }, () => {
-    if (chrome.runtime.lastError) {
-      serverLog('Diffusion forcée non délivrée', 'warn');
+  try {
+    const isOnline = await checkServerOnline();
+    
+    // Diffuser à nouveau l'état, même s'il n'a pas changé
+    chrome.runtime.sendMessage({ 
+      action: 'serverStatusChanged', 
+      status: { isConnected: isOnline } 
+    }, () => {
+      if (chrome.runtime.lastError) {
+        serverLog('Diffusion forcée non délivrée', 'warn');
+      }
+    });
+    
+    return isOnline;
+  } catch (error) {
+    serverLog(`Erreur lors de la vérification forcée: ${error.message}`, 'error');
+    
+    // Tentative de récupération
+    try {
+      // Importer dynamiquement pour éviter les dépendances circulaires
+      const authModule = await import('./auth.js');
+      await authModule.handleTokenInconsistency();
+      
+      // Réessayer la vérification
+      const retryOnline = await checkServerOnline();
+      
+      chrome.runtime.sendMessage({ 
+        action: 'serverStatusChanged', 
+        status: { 
+          isConnected: retryOnline, 
+          recoveryAttempted: true 
+        } 
+      }, () => {
+        if (chrome.runtime.lastError) {
+          serverLog('Diffusion après récupération non délivrée', 'warn');
+        }
+      });
+      
+      return retryOnline;
+    } catch (recoveryError) {
+      serverLog(`Erreur de récupération: ${recoveryError.message}`, 'error');
+      return false;
     }
-  });
-  
-  return isOnline;
+  }
 }
 
 // Exécute une tâche sur le serveur

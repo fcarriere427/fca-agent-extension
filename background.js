@@ -227,3 +227,58 @@ setInterval(async () => {
     BGLog(`Erreur lors de la vérification périodique: ${error.message}`, 'warn');
   }
 }, 5 * 60 * 1000); // Vérification complète toutes les 5 minutes
+
+// Mécanisme de supervision avancé
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'systemHealthCheck') {
+    BGLog('Réception d\'une demande de vérification de santé système');
+    
+    const fullSystemCheck = async () => {
+      try {
+        const authModule = await import('./background/auth.js');
+        const serverModule = await import('./background/server.js');
+        
+        const authStatus = authModule.getAuthStatus();
+        const serverStatus = serverModule.getServerStatus();
+        
+        // Vérifications complètes
+        const authCheck = authStatus.isAuthenticated ? await authModule.checkAuthWithServer() : false;
+        const serverCheck = await serverModule.forceServerCheck();
+        
+        // Tentative de récupération si nécessaire
+        if (!authCheck) {
+          await authModule.handleTokenInconsistency();
+        }
+        
+        return {
+          success: true,
+          authStatus: authStatus,
+          serverStatus: serverStatus,
+          authValidated: authCheck,
+          serverValidated: serverCheck,
+          timestamp: Date.now()
+        };
+      } catch (error) {
+        BGLog(`Erreur lors de la vérification système complète: ${error.message}`, 'error');
+        return {
+          success: false,
+          error: error.message,
+          timestamp: Date.now()
+        };
+      }
+    };
+
+    // Exécution de la vérification système
+    fullSystemCheck().then(result => {
+      sendResponse(result);
+    }).catch(error => {
+      sendResponse({
+        success: false,
+        error: error.message,
+        timestamp: Date.now()
+      });
+    });
+    
+    return true; // Indique une réponse asynchrone
+  }
+});

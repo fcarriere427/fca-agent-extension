@@ -201,13 +201,32 @@ async function handleCheckAuthentication(sendResponse) {
     // Vérification optionnelle auprès du serveur en arrière-plan
     // (ne bloque pas la réponse)
     if (authStatus.isAuthenticated) {
-      checkAuthWithServer()
-        .then(serverAuthResult => {
-          handlerLog(`Vérification serveur complétée: ${JSON.stringify(serverAuthResult)}`);
-        })
-        .catch(error => {
-          handlerLog(`Erreur lors de la vérification avec le serveur: ${error.message}`, 'warn');
+      try {
+        const serverAuthResult = await checkAuthWithServer();
+        handlerLog(`Vérification serveur complétée: ${JSON.stringify(serverAuthResult)}`);
+        
+        // Si le serveur invalide l'authentification
+        if (!serverAuthResult) {
+          await import('./auth.js').then(authModule => {
+            authModule.handleTokenInconsistency()
+              .then(() => handlerLog('Récupération de token tentée'))
+              .catch(recoveryError => {
+                handlerLog(`Erreur de récupération de token: ${recoveryError.message}`, 'error');
+              });
+          });
+        }
+      } catch (error) {
+        handlerLog(`Erreur lors de la vérification avec le serveur: ${error.message}`, 'warn');
+        
+        // Tenter une récupération d'urgence
+        await import('./auth.js').then(authModule => {
+          authModule.handleTokenInconsistency()
+            .then(() => handlerLog('Récupération de token tentée'))
+            .catch(recoveryError => {
+              handlerLog(`Erreur de récupération de token: ${recoveryError.message}`, 'error');
+            });
         });
+      }
     }
   } catch (error) {
     handlerLog(`Erreur lors de la vérification d'authentification: ${error.message}`, 'error');

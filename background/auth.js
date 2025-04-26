@@ -482,6 +482,43 @@ export function getAuthHeaders() {
   return { 'Authorization': `Bearer ${authToken}` };
 }
 
+// Nouvelle méthode de gestion des incohérences de token
+export async function handleTokenInconsistency() {
+  authLog('Début de la récupération de token', 'debug');
+  
+  // Récupérer les tokens de différentes sources
+  const getSessionToken = () => {
+    try {
+      return window.sessionStorage.getItem('authTokenBackup');
+    } catch (e) {
+      authLog('Erreur de récupération du token de session', 'warn');
+      return null;
+    }
+  };
+
+  const getLocalToken = () => {
+    return new Promise((resolve) => {
+      chrome.storage.local.get(['authToken'], (result) => {
+        resolve(result.authToken || null);
+      });
+    });
+  };
+
+  const backupToken = getSessionToken();
+  const storedToken = await getLocalToken();
+
+  if (backupToken) {
+    authLog('Récupération du token de sauvegarde', 'warn');
+    return setToken(backupToken);
+  } else if (storedToken) {
+    authLog('Récupération du token stocké localement', 'warn');
+    return setToken(storedToken);
+  } else {
+    authLog('Aucun token disponible, déconnexion forcée', 'error');
+    return resetAuthentication();
+  }
+}
+
 // Fonction publique pour réinitialiser l'authentification (utilisée par d'autres modules)
 export function resetAuthentication() {
   authLog('Réinitialisation forcée de l\'authentification depuis un module externe');
@@ -503,6 +540,9 @@ export function resetAuthentication() {
   
   // Notifier les composants
   broadcastAuthStatus();
+
+  // Nouvelle méthode de surveillance en cas de problème persistant
+  setTimeout(handleTokenInconsistency, 1000);
 }
 
 // Fonction publique pour définir directement un token (utilisée pour les récupérations d'urgence)
