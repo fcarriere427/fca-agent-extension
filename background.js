@@ -1,18 +1,10 @@
 // FCA-Agent - Background Service Worker (version refactorisée)
 
 import { loadInitialConfig, setDefaultConfig, getApiUrl } from './background/config.js';
-import { 
-  loadAuthState, 
-  getAuthStatus, 
-  checkAuthWithServer, 
-  getAuthHeaders,
-  getAuthHeadersSync,
-  handleTokenInconsistency,
-  setToken,
-  resetAuthentication
-} from './background/auth.js';
-import { setupMessageHandlers } from './background/handlers.js';
-import { checkServerOnline, getServerStatus, forceServerCheck } from './background/server.js';
+import { getAuthHeaders } from './background/auth-headers.js';
+import { isAuthConfigured } from './background/auth-headers.js';
+import { setupMessageHandlers } from './background/handlers-simplified.js';
+import { checkServerOnline, getServerStatus, forceServerCheck } from './background/server-simplified.js';
 import { createModuleLogger } from './utils/logger.js';
 
 // Création d'une instance de logger spécifique pour ce module
@@ -37,89 +29,41 @@ function BGLog(message, level = 'info') {
 
 /**
  * Vérifie l'intégrité du système après initialisation
- * @param {Object} authStatus - État d'authentification actuel
  * @returns {Promise<boolean>} - Résultat de la vérification
  */
-async function verifySystemIntegrity(authStatus) {
+async function verifySystemIntegrity() {
   logger.log('Démarrage de la vérification d\'intégrité du système...');
   let isSystemConsistent = true;
   
-  // 1. Vérification de la cohérence de l'authentification
-  if (authStatus.isAuthenticated) {
-    logger.log('Vérification de la cohérence de l\'authentification...');
-    try {
-      // Tentative répétée pour obtenir les headers (jusqu'à 3 essais)
-      let authHeaders = null;
-      let headerAttempts = 0;
-      const maxHeaderAttempts = 3;
-      
-      while (headerAttempts < maxHeaderAttempts) {
-        // Délai progressif entre les tentatives
-        if (headerAttempts > 0) {
-          await new Promise(resolve => setTimeout(resolve, headerAttempts * 200));
-        }
-        
-        try {
-          // Utilisation directe de getAuthHeaders (importé statiquement)
-          const headers = await getAuthHeaders();
-          
-          if (headers && headers.Authorization) {
-            logger.log(`Headers d'authentification obtenus après ${headerAttempts + 1} tentative(s)`);
-            authHeaders = headers;
-            break;
-          } else {
-            logger.warn(`Tentative ${headerAttempts + 1}/${maxHeaderAttempts}: headers incomplets, nouvel essai...`);
-          }
-        } catch (headerError) {
-          logger.error(`Erreur lors de la tentative ${headerAttempts + 1}/${maxHeaderAttempts}: ${headerError.message}`);
-        }
-        headerAttempts++;
-      }
-      
-      if (!authHeaders || !authHeaders.Authorization) {
-        logger.error('ALERTE CRITIQUE: Incohérence après initialisation - authentifié mais pas de token!');
-        isSystemConsistent = false;
-        
-        // Tentative de récupération d'urgence
-        try {
-          // Utilisation directe de handleTokenInconsistency (importé statiquement)
-          const recovered = await handleTokenInconsistency();
-          
-          if (recovered) {
-            logger.warn('Récupération d\'urgence réussie, système restauré');
-            // Vérification que la récupération a fonctionné
-            const newHeaders = await getAuthHeaders();
-            if (newHeaders && newHeaders.Authorization) {
-              logger.log('Cohérence restaurée après récupération');
-              isSystemConsistent = true;
-            }
-          } else {
-            logger.error('Récupération d\'urgence échouée!');
-          }
-        } catch (recoveryError) {
-          logger.error(`Erreur lors de la tentative de récupération: ${recoveryError.message}`);
-        }
-      } else {
-        logger.log('Intégrité de l\'authentification vérifiée et valide');
-      }
-    } catch (authCheckError) {
-      logger.error(`Erreur lors de la vérification d'authentification: ${authCheckError.message}`);
+  // 1. Vérification de la configuration de la clé API
+  try {
+    if (!isAuthConfigured()) {
+      logger.error('ALERTE CRITIQUE: Clé API non configurée!');
       isSystemConsistent = false;
+    } else {
+      // Vérifier que les headers d'authentification sont générés correctement
+      const headers = getAuthHeaders();
+      if (!headers || !headers.Authorization) {
+        logger.error('ALERTE: Problème avec la génération des headers d\'authentification');
+        isSystemConsistent = false;
+      } else {
+        logger.log('Clé API configurée correctement');
+      }
     }
-  } else {
-    logger.log('Pas d\'authentification active, vérification d\'intégrité ignorée');
+  } catch (authCheckError) {
+    logger.error(`Erreur lors de la vérification d'authentification: ${authCheckError.message}`);
+    isSystemConsistent = false;
   }
   
   // 2. Vérification de la configuration
   try {
-    // Utilisation directe de getApiUrl (importé statiquement)
     const apiUrl = getApiUrl();
     
     if (!apiUrl) {
       logger.error('ALERTE: URL de l\'API non définie ou invalide!');
       isSystemConsistent = false;
     } else {
-      logger.log(`URL API déja configurée: ${apiUrl}`);
+      logger.log(`URL API configurée: ${apiUrl}`);
     }
   } catch (configError) {
     logger.error(`Erreur lors de la vérification de configuration: ${configError.message}`);
@@ -136,7 +80,7 @@ async function verifySystemIntegrity(authStatus) {
   return isSystemConsistent;
 }
 
-// Fonctions d'initialisation séparées par domaine
+// Fonctions d'initialisation simplifiées
 async function initializeConfig() {
   logger.log('Initialisation de la configuration...');
   await loadInitialConfig();
@@ -144,67 +88,65 @@ async function initializeConfig() {
 }
 
 async function initializeAuth() {
-  logger.log('Initialisation de l\'authentification...');
+  logger.log('Initialisation de l\'authentification avec clé API fixe...');
   
   try {
-    // Chargement de l'état d'authentification depuis le stockage local
-    const authStatus = await loadAuthState();
-    logger.log(`État initial d'authentification: ${JSON.stringify(authStatus)}`);
-  
-    if (authStatus.isAuthenticated) {
-      logger.log('Authentifié localement, vérification avec le serveur...');
-      
-      // Vérification des headers pour s'assurer que le token est disponible
-      try {
-        // Utilisation directe de getAuthHeaders (importé statiquement)
-        const headers = await getAuthHeaders();
-        
-        if (!headers.Authorization) {
-          logger.error('ALERTE: Token manquant dans les headers alors que marqué comme authentifié!');
-          // Tentative de récupération d'urgence
-          const recoveryResult = await new Promise(resolve => {
-            chrome.storage.local.get(['authToken'], async (result) => {
-              if (result && result.authToken) {
-                logger.log(`Token trouvé dans le stockage: ${result.authToken.substring(0, 4)}...${result.authToken.substring(result.authToken.length-4)}`);
-                await setToken(result.authToken);
-                resolve(true);
-              } else {
-                logger.error('Aucun token trouvé dans le stockage, déconnexion forcée');
-                await resetAuthentication();
-                resolve(false);
-              }
-            });
-          });
-          
-          if (!recoveryResult) {
-            logger.error('Récupération d\'urgence du token échouée');
-            return { isAuthenticated: false, hasToken: false };
-          }
-        } else {
-          logger.log(`Token disponible: ${headers.Authorization.substring(0, 15)}...`);
-        }
-      } catch (headerError) {
-        logger.error(`Erreur lors de la récupération des headers: ${headerError.message}`);
-        return { isAuthenticated: false, hasToken: false };
-      }
-      
-      // Vérification avec le serveur pour confirmer validité
-      try {
-        const serverAuthStatus = await checkAuthWithServer();
-        logger.log(`Résultat de la vérification avec le serveur: ${JSON.stringify(serverAuthStatus)}`);
-        return serverAuthStatus;
-      } catch (error) {
-        logger.warn(`Erreur lors de la vérification avec le serveur: ${error.message}`);
-        return authStatus;
-      }
-    } else {
-      // Pas d'authentification locale, retourner simplement l'état
-      logger.log('Non authentifié localement');
-      return authStatus;
+    // Vérification de la configuration de la clé API
+    if (!isAuthConfigured()) {
+      logger.error('ALERTE CRITIQUE: Clé API non configurée!');
+      return { isAuthenticated: false };
     }
+    
+    // Génération des headers pour vérifier que tout fonctionne
+    const headers = getAuthHeaders();
+    if (!headers || !headers.Authorization) {
+      logger.error('ALERTE: Problème avec la génération des headers d\'authentification');
+      return { isAuthenticated: false };
+    }
+    
+    logger.log('Clé API configurée correctement');
+    
+    // Notification du statut d'authentification avec la clé API fixe
+    const authStatus = { isAuthenticated: true };
+    broadcastAuthStatus(authStatus);
+    
+    return authStatus;
   } catch (error) {
     logger.error(`Erreur lors de l'initialisation de l'authentification: ${error.message}`);
-    return { isAuthenticated: false, hasToken: false };
+    return { isAuthenticated: false };
+  }
+}
+
+/**
+ * Diffuse le statut d'authentification aux autres composants
+ * @param {Object} status - Statut d'authentification à diffuser
+ */
+function broadcastAuthStatus(status = { isAuthenticated: true }) {
+  logger.log(`Diffusion du statut d'authentification: ${JSON.stringify(status)}`);
+  
+  try {
+    // Essayer d'abord avec chrome.runtime.sendMessage
+    chrome.runtime.sendMessage({ 
+      action: 'authStatusChanged', 
+      status: status 
+    }, response => {
+      if (chrome.runtime.lastError) {
+        logger.warn(`Message authStatusChanged non délivré: ${chrome.runtime.lastError.message}`);
+      } else {
+        logger.log('Message authStatusChanged délivré avec succès');
+      }
+    });
+    
+    // Enregistrer l'état dans le stockage local pour permettre la récupération par d'autres composants
+    chrome.storage.local.set({ 'authStatus': status }, () => {
+      if (chrome.runtime.lastError) {
+        logger.warn(`Impossible de sauvegarder l'état d'authentification: ${chrome.runtime.lastError.message}`);
+      } else {
+        logger.log('Statut d\'authentification sauvegardé dans le storage local');
+      }
+    });
+  } catch (error) {
+    logger.error(`Erreur lors de la diffusion du statut: ${error.message}`);
   }
 }
 
@@ -226,108 +168,44 @@ async function initializeServer() {
   }
 }
 
-// Fonction principale d'initialisation
+// Fonction principale d'initialisation simplifiée
 async function initialize() {
-  logger.log('Initialisation du service worker FCA-Agent...');
+  logger.log('Initialisation du service worker FCA-Agent avec clé API fixe...');
   
   try {
-    // Chargement séquentiel des modules avec délais pour assurer la stabilité
+    // Étape 1: Initialisation de la configuration
     logger.log('Étape 1: Initialisation de la configuration');
     await initializeConfig();
     
-    // Délai court pour assurer que la configuration est bien chargée
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Étape 2: Initialisation de l'authentification simplifiée
+    logger.log('Étape 2: Initialisation de l\'authentification avec clé API fixe');
+    const authStatus = await initializeAuth();
     
-    logger.log('Étape 2: Initialisation de l\'authentification');
-    // Tentative répétée pour l'authentification (jusqu'à 3 essais)
-    let authStatus = null;
-    let authAttempts = 0;
-    const maxAuthAttempts = 3;
-    
-    while (authAttempts < maxAuthAttempts) {
-      try {
-        authStatus = await initializeAuth();
-        if (authStatus && (authStatus.hasToken || !authStatus.isAuthenticated)) {
-          logger.log(`Authentification réussie après ${authAttempts + 1} tentative(s)`);
-          break;
-        } else {
-          logger.warn(`Tentative d'authentification ${authAttempts + 1}/${maxAuthAttempts} incomplète, nouvel essai...`);
-          await new Promise(resolve => setTimeout(resolve, 300));
-        }
-      } catch (authError) {
-        logger.error(`Erreur lors de la tentative d'authentification ${authAttempts + 1}/${maxAuthAttempts}: ${authError.message}`);
-      }
-      authAttempts++;
-    }
-    
-    if (authAttempts >= maxAuthAttempts) {
-      logger.error(`Échec de l'initialisation de l'authentification après ${maxAuthAttempts} tentatives`);
-      // Si l'authentification a échoué, on réinitialise l'état
-      authStatus = { isAuthenticated: false, hasToken: false };
-    }
-    
+    // Étape 3: Initialisation du serveur
     logger.log('Étape 3: Initialisation de la connexion au serveur');
     const serverStatus = await initializeServer();
     
+    // Récapitulatif
     logger.log(`Statut après initialisation - Auth: ${authStatus.isAuthenticated}, Server: ${serverStatus}`);
     
-    // Vérification complète de l'intégrité du système après initialisation
-    await verifySystemIntegrity(authStatus);
+    // Vérification de l'intégrité du système
+    await verifySystemIntegrity();
     
     // Configuration des gestionnaires de messages
     setupMessageHandlers();
     
     logger.log('Initialisation du service worker terminée');
     
-    // Force une vérification complète après l'initialisation avec des délais progressifs
+    // Vérification rapide du serveur après une courte période
     setTimeout(async () => {
-      logger.log('Vérification forcée #1 après initialisation');
       try {
         // Vérification du serveur
         const serverOnline = await forceServerCheck();
-        logger.log(`Vérification serveur #1: ${serverOnline ? 'connecté' : 'déconnecté'}`);
-        
-        // Attente avant la vérification d'authentification
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Test d'authentification si nécessaire
-        if (authStatus.isAuthenticated) {
-          logger.log('Test de vérification d\'authentification #1');
-          try {
-            const authResult = await checkAuthWithServer();
-            logger.log(`Résultat vérification auth #1: ${JSON.stringify(authResult)}`);
-          } catch (authError) {
-            logger.error(`Erreur vérification auth #1: ${authError.message}`);
-          }
-        }
+        logger.log(`Vérification finale du serveur: ${serverOnline ? 'connecté' : 'déconnecté'}`);
+        logger.log('Initialisation complète et stable confirmée');
       } catch (error) {
-        logger.error(`Erreur lors de la vérification forcée #1: ${error.message}`);
+        logger.error(`Erreur lors de la vérification finale: ${error.message}`);
       }
-      
-      // Deuxième vérification (plus tard) pour s'assurer que tout est stable
-      setTimeout(async () => {
-        logger.log('Vérification forcée #2 après initialisation');
-        try {
-          // Nouvelle vérification d'intégrité
-          // Utilisation directe de getAuthStatus (importé statiquement)
-          const currentAuthStatus = getAuthStatus();
-          await verifySystemIntegrity(currentAuthStatus);
-          
-          // Vérification du serveur
-          const serverOnline = await forceServerCheck();
-          logger.log(`Vérification serveur #2: ${serverOnline ? 'connecté' : 'déconnecté'}`);
-          
-          // Test d'authentification final
-          if (currentAuthStatus.isAuthenticated) {
-            logger.log('Test de vérification d\'authentification final');
-            await checkAuthWithServer();
-          }
-          
-          logger.log('Initialisation complète et stable confirmée');
-        } catch (error) {
-          logger.error(`Erreur lors de la vérification forcée #2: ${error.message}`);
-        }
-      }, 5000);
     }, 2000);
     
     return { authStatus, serverStatus };
@@ -370,9 +248,9 @@ let initPromise = initialize().catch(error => {
 // Export de la promesse d'initialisation pour permettre à d'autres modules de s'y synchroniser
 export { initPromise };
 
-// Mise en place d'une vérification périodique rapide pour les statuts
+// Mise en place d'une vérification périodique du serveur uniquement
 setInterval(async () => {
-  logger.log('Vérification périodique rapide du serveur...');
+  logger.log('Vérification périodique du serveur...');
   
   try {
     // Vérifier le serveur et forcer la diffusion du statut
@@ -382,66 +260,24 @@ setInterval(async () => {
   }
 }, 30 * 1000); // Vérification toutes les 30 secondes
 
-// Mise en place d'une vérification périodique plus complète
-setInterval(async () => {
-  logger.log('Vérification périodique complète des statuts...');
-  
-  try {
-    // Vérifier d'abord si le serveur est en ligne
-    const isServerOnline = await forceServerCheck();
-    logger.log(`Serveur en ligne: ${isServerOnline}`);
-    
-    // Si le serveur est en ligne et que nous sommes authentifiés localement, vérifier avec le serveur
-    if (isServerOnline) {
-      const authStatus = getAuthStatus();
-      if (authStatus.isAuthenticated) {
-        logger.log('Authentifié localement, vérification avec le serveur...');
-        const serverAuthStatus = await checkAuthWithServer();
-        logger.log(`Résultat de la vérification: ${JSON.stringify(serverAuthStatus)}`);
-      }
-    }
-  } catch (error) {
-    logger.warn(`Erreur lors de la vérification périodique: ${error.message}`);
-  }
-}, 5 * 60 * 1000); // Vérification complète toutes les 5 minutes
-
-// Mécanisme de supervision avancé
+// Mécanisme de supervision simplifié
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'systemHealthCheck') {
     logger.log('Réception d\'une demande de vérification de santé système');
     
     const fullSystemCheck = async () => {
       try {
-        // Utilisation directe des fonctions importées statiquement
-        const authStatus = getAuthStatus();
+        // Vérification du serveur
         const serverStatus = getServerStatus();
-        
-        // Vérifications complètes
-        let authCheck = false;
-        if (authStatus.isAuthenticated) {
-          try {
-            authCheck = await checkAuthWithServer();
-          } catch (authError) {
-            logger.error(`Erreur lors de la vérification d'authentification: ${authError.message}`);
-          }
-        }
-        
         const serverCheck = await forceServerCheck();
         
-        // Tentative de récupération si nécessaire
-        if (authStatus.isAuthenticated && !authCheck) {
-          try {
-            await handleTokenInconsistency();
-          } catch (recoveryError) {
-            logger.error(`Erreur lors de la tentative de récupération: ${recoveryError.message}`);
-          }
-        }
+        // Vérification de l'authentification avec clé API fixe
+        const authStatus = { isAuthenticated: isAuthConfigured() };
         
         return {
           success: true,
           authStatus: authStatus,
           serverStatus: serverStatus,
-          authValidated: authCheck,
           serverValidated: serverCheck,
           timestamp: Date.now()
         };
@@ -454,7 +290,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         };
       }
     };
-
+    
     // Exécution de la vérification système
     fullSystemCheck().then(result => {
       sendResponse(result);
