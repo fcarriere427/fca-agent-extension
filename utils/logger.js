@@ -28,17 +28,39 @@ function formatObject(obj) {
   return String(obj);
 }
 
+/**
+ * Crée un logger dédié à un module spécifique
+ * @param {string} moduleName - Nom du module pour identification dans les logs
+ * @returns {Object} - Logger configuré pour le module
+ */
+export function createModuleLogger(moduleName) {
+  return {
+    log: function(message, data = null) {
+      logger.log(moduleName, message, data);
+    },
+    warn: function(message, data = null) {
+      logger.warn(moduleName, message, data);
+    },
+    error: function(message, data = null) {
+      logger.error(moduleName, message, data);
+    },
+    info: function(message, data = null) {
+      logger.log(moduleName, message, data);
+    }
+  };
+}
+
 // Création d'une instance de logger unique et globale
 const logger = {
   /**
    * Journalise un message standard
-   * @param {string} fileName - Nom du fichier source
+   * @param {string} moduleName - Nom du module source
    * @param {string} message - Message à journaliser
    * @param {Object} [data] - Données supplémentaires
    */
-  log: function(fileName, message, data = null) {
+  log: function(moduleName, message, data = null) {
     const timestamp = getTimestamp();
-    let fullMessage = `${timestamp} INFO [${fileName}]: ${message}`;
+    let fullMessage = `${timestamp} INFO [${moduleName}]: ${message}`;
     
     console.log(fullMessage);
     if (data !== null) {
@@ -48,13 +70,13 @@ const logger = {
   
   /**
    * Journalise un avertissement
-   * @param {string} fileName - Nom du fichier source
+   * @param {string} moduleName - Nom du module source
    * @param {string} message - Message d'avertissement
    * @param {Object} [data] - Données supplémentaires
    */
-  warn: function(fileName, message, data = null) {
+  warn: function(moduleName, message, data = null) {
     const timestamp = getTimestamp();
-    let fullMessage = `${timestamp} WARN [${fileName}]: ${message}`;
+    let fullMessage = `${timestamp} WARN [${moduleName}]: ${message}`;
     
     console.warn(fullMessage);
     if (data !== null) {
@@ -64,13 +86,13 @@ const logger = {
   
   /**
    * Journalise une erreur
-   * @param {string} fileName - Nom du fichier source
+   * @param {string} moduleName - Nom du module source
    * @param {string} message - Message d'erreur
    * @param {Object} [data] - Données supplémentaires
    */
-  error: function(fileName, message, data = null) {
+  error: function(moduleName, message, data = null) {
     const timestamp = getTimestamp();
-    let fullMessage = `${timestamp} ERROR [${fileName}]: ${message}`;
+    let fullMessage = `${timestamp} ERROR [${moduleName}]: ${message}`;
     
     console.error(fullMessage);
     if (data !== null) {
@@ -79,8 +101,8 @@ const logger = {
   },
   
   // Pour compatibilité avec l'ancien code
-  info: function(fileName, message, data = null) {
-    this.log(fileName, message, data);
+  info: function(moduleName, message, data = null) {
+    this.log(moduleName, message, data);
   }
 };
 

@@ -4,63 +4,60 @@ import { loadInitialConfig, setDefaultConfig } from './background/config.js';
 import { loadAuthState, getAuthStatus, checkAuthWithServer } from './background/auth.js';
 import { setupMessageHandlers } from './background/handlers.js';
 import { checkServerOnline, getServerStatus, forceServerCheck } from './background/server.js';
+import { createModuleLogger } from './utils/logger.js';
 
+// Création d'une instance de logger spécifique pour ce module
+const logger = createModuleLogger('background.js');
 
-// Logger spécifique au script principal avec timestamp précis
+// Fonction de compatibilité pour l'ancien code (sera progressivement remplacée)
 function BGLog(message, level = 'info') {
-  const prefix = '[Background.js]';
-  
-  // Création d'un timestamp précis pour le débogage
-  const now = new Date();
-  const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${now.getMilliseconds().toString().padStart(3, '0')}`;
-  
   switch(level) {
     case 'error':
-      console.error(`${timestamp} ${prefix} ${message}`);
+      logger.error(message);
       break;
     case 'warn':
-      console.warn(`${timestamp} ${prefix} ${message}`);
+      logger.warn(message);
       break;
     case 'debug':
-      console.debug(`${timestamp} ${prefix} DEBUG: ${message}`);
+      logger.log(`DEBUG: ${message}`);
       break;
     default:
-      console.log(`${timestamp} ${prefix} ${message}`);
+      logger.log(message);
   }
 }
 
 // Fonctions d'initialisation séparées par domaine
 async function initializeConfig() {
-  BGLog('Initialisation de la configuration...');
+  logger.log('Initialisation de la configuration...');
   await loadInitialConfig();
-  BGLog('Configuration chargée');
+  logger.log('Configuration chargée');
 }
 
 async function initializeAuth() {
-  BGLog('Initialisation de l\'authentification...');
+  logger.log('Initialisation de l\'authentification...');
   
   try {
     // Chargement de l'état d'authentification depuis le stockage local
     const authStatus = await loadAuthState();
-    BGLog(`État initial d'authentification: ${JSON.stringify(authStatus)}`);
+    logger.log(`État initial d'authentification: ${JSON.stringify(authStatus)}`);
   
     if (authStatus.isAuthenticated) {
-      BGLog('Authentifié localement, vérification avec le serveur...');
+      logger.log('Authentifié localement, vérification avec le serveur...');
       
       // Vérification des headers pour s'assurer que le token est disponible
       const headers = await import('./background/auth.js').then(module => module.getAuthHeaders());
       if (!headers.Authorization) {
-        BGLog('ALERTE: Token manquant dans les headers alors que marqué comme authentifié!', 'error');
+        logger.error('ALERTE: Token manquant dans les headers alors que marqué comme authentifié!');
         // Tentative de récupération d'urgence
         const recoveryResult = await import('./background/auth.js').then(module => {
           return new Promise(resolve => {
             chrome.storage.local.get(['authToken'], (result) => {
               if (result && result.authToken) {
-                BGLog(`Token trouvé dans le stockage: ${result.authToken.substring(0, 4)}...${result.authToken.substring(result.authToken.length-4)}`, 'debug');
+                logger.log(`Token trouvé dans le stockage: ${result.authToken.substring(0, 4)}...${result.authToken.substring(result.authToken.length-4)}`);
                 module.setToken(result.authToken);
                 resolve(true);
               } else {
-                BGLog('Aucun token trouvé dans le stockage, déconnexion forcée', 'error');
+                logger.error('Aucun token trouvé dans le stockage, déconnexion forcée');
                 module.resetAuthentication();
                 resolve(false);
               }
@@ -69,38 +66,38 @@ async function initializeAuth() {
         });
         
         if (!recoveryResult) {
-          BGLog('Récupération d\'urgence du token échouée', 'error');
+          logger.error('Récupération d\'urgence du token échouée');
           return { isAuthenticated: false, hasToken: false };
         }
       } else {
-        BGLog(`Token disponible: ${headers.Authorization.substring(0, 15)}...`, 'debug');
+        logger.log(`Token disponible: ${headers.Authorization.substring(0, 15)}...`);
       }
       
       // Vérification avec le serveur pour confirmer validité
       try {
         const serverAuthStatus = await checkAuthWithServer();
-        BGLog(`Résultat de la vérification avec le serveur: ${JSON.stringify(serverAuthStatus)}`);
+        logger.log(`Résultat de la vérification avec le serveur: ${JSON.stringify(serverAuthStatus)}`);
         return serverAuthStatus;
       } catch (error) {
-        BGLog(`Erreur lors de la vérification avec le serveur: ${error.message}`, 'warn');
+        logger.warn(`Erreur lors de la vérification avec le serveur: ${error.message}`);
         return authStatus;
       }
     } else {
       // Pas d'authentification locale, retourner simplement l'état
-      BGLog('Non authentifié localement');
+      logger.log('Non authentifié localement');
       return authStatus;
     }
   } catch (error) {
-    BGLog(`Erreur lors de l'initialisation de l'authentification: ${error.message}`, 'error');
+    logger.error(`Erreur lors de l'initialisation de l'authentification: ${error.message}`);
     return { isAuthenticated: false, hasToken: false };
   }
 }
 
 async function initializeServer() {
-  BGLog('Vérification de l\'état du serveur...');
+  logger.log('Vérification de l\'état du serveur...');
   try {
     const serverStatus = await checkServerOnline();
-    BGLog(`État initial du serveur: ${serverStatus ? 'connecté' : 'déconnecté'}`);
+    logger.log(`État initial du serveur: ${serverStatus ? 'connecté' : 'déconnecté'}`);
     
     // Force une diffusion de l'état initial
     if (serverStatus) {
@@ -109,14 +106,14 @@ async function initializeServer() {
     
     return serverStatus;
   } catch (error) {
-    BGLog(`Erreur lors de la vérification initiale du serveur: ${error.message}`, 'warn');
+    logger.warn(`Erreur lors de la vérification initiale du serveur: ${error.message}`);
     return false;
   }
 }
 
 // Fonction principale d'initialisation
 async function initialize() {
-  BGLog('Initialisation du service worker FCA-Agent...');
+  logger.log('Initialisation du service worker FCA-Agent...');
   
   try {
     // Chargement séquentiel des modules
@@ -124,52 +121,52 @@ async function initialize() {
     const authStatus = await initializeAuth();
     const serverStatus = await initializeServer();
     
-    BGLog(`Statut après initialisation - Auth: ${authStatus.isAuthenticated}, Server: ${serverStatus}`);
+    logger.log(`Statut après initialisation - Auth: ${authStatus.isAuthenticated}, Server: ${serverStatus}`);
     
     // Vérification de l'intégrité du système
     if (authStatus.isAuthenticated) {
       const headers = await import('./background/auth.js').then(module => module.getAuthHeaders());
       if (!headers.Authorization) {
-        BGLog('ALERTE CRITIQUE: Incohérence après initialisation - authentifié mais pas de token!', 'error');
+        logger.error('ALERTE CRITIQUE: Incohérence après initialisation - authentifié mais pas de token!');
       } else {
-        BGLog('Intégrité de l\'authentification vérifiée', 'debug');
+        logger.log('Intégrité de l\'authentification vérifiée');
       }
     }
     
     // Configuration des gestionnaires de messages
     setupMessageHandlers();
     
-    BGLog('Initialisation du service worker terminée');
+    logger.log('Initialisation du service worker terminée');
     
     // Force une vérification après l'initialisation
     setTimeout(async () => {
-      BGLog('Vérification forcée après initialisation');
+      logger.log('Vérification forcée après initialisation');
       await forceServerCheck();
       
       // Test d'une requête d'authentification pour s'assurer que tout est opposé
       if (authStatus.isAuthenticated) {
-        BGLog('Test de vérification d\'authentification post-initialisation', 'debug');
+        logger.log('Test de vérification d\'authentification post-initialisation');
         await checkAuthWithServer();
       }
     }, 2000);
     
     return { authStatus, serverStatus };
   } catch (initError) {
-    BGLog(`Erreur critique lors de l'initialisation: ${initError.message}`, 'error');
-    BGLog(`Stack trace: ${initError.stack}`, 'error');
+    logger.error(`Erreur critique lors de l'initialisation: ${initError.message}`);
+    logger.error(`Stack trace: ${initError.stack}`);
     return { authStatus: { isAuthenticated: false }, serverStatus: false };
   }
 }
 
 // Installation/mise à jour de l'extension
 chrome.runtime.onInstalled.addListener(async (details) => {
-  BGLog(`FCA-Agent installé/mis à jour: ${details.reason}`);
+  logger.log(`FCA-Agent installé/mis à jour: ${details.reason}`);
   
   if (details.reason === 'install') {
-    BGLog('Première installation, réinitialisation des paramètres...');
+    logger.log('Première installation, réinitialisation des paramètres...');
     // Effacer tous les tokens d'authentification lors d'une nouvelle installation
     chrome.storage.local.remove(['authToken'], () => {
-      BGLog('Token d\'authentification supprimé (nouvelle installation)');
+      logger.log('Token d\'authentification supprimé (nouvelle installation)');
     });
   }
   
@@ -179,14 +176,14 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
 // Démarrage du service worker
 chrome.runtime.onStartup.addListener(() => {
-  BGLog('Service worker démarré via onStartup');
+  logger.log('Service worker démarré via onStartup');
   initialize();
 });
 
 // Initialisation immédiate (pour les cas où onStartup n'est pas déclenché)
 let initPromise = initialize().catch(error => {
-  BGLog(`Erreur lors de l'initialisation du service worker: ${error.message}`, 'error');
-  BGLog(`Stack: ${error.stack}`, 'error');
+  logger.error(`Erreur lors de l'initialisation du service worker: ${error.message}`);
+  logger.error(`Stack: ${error.stack}`);
   return { authStatus: { isAuthenticated: false }, serverStatus: false };
 });
 
@@ -195,43 +192,43 @@ export { initPromise };
 
 // Mise en place d'une vérification périodique rapide pour les statuts
 setInterval(async () => {
-  BGLog('Vérification périodique rapide du serveur...');
+  logger.log('Vérification périodique rapide du serveur...');
   
   try {
     // Vérifier le serveur et forcer la diffusion du statut
     await forceServerCheck();
   } catch (error) {
-    BGLog(`Erreur lors de la vérification rapide: ${error.message}`, 'warn');
+    logger.warn(`Erreur lors de la vérification rapide: ${error.message}`);
   }
 }, 30 * 1000); // Vérification toutes les 30 secondes
 
 // Mise en place d'une vérification périodique plus complète
 setInterval(async () => {
-  BGLog('Vérification périodique complète des statuts...');
+  logger.log('Vérification périodique complète des statuts...');
   
   try {
     // Vérifier d'abord si le serveur est en ligne
     const isServerOnline = await forceServerCheck();
-    BGLog(`Serveur en ligne: ${isServerOnline}`);
+    logger.log(`Serveur en ligne: ${isServerOnline}`);
     
     // Si le serveur est en ligne et que nous sommes authentifiés localement, vérifier avec le serveur
     if (isServerOnline) {
       const authStatus = getAuthStatus();
       if (authStatus.isAuthenticated) {
-        BGLog('Authentifié localement, vérification avec le serveur...');
+        logger.log('Authentifié localement, vérification avec le serveur...');
         const serverAuthStatus = await checkAuthWithServer();
-        BGLog(`Résultat de la vérification: ${JSON.stringify(serverAuthStatus)}`);
+        logger.log(`Résultat de la vérification: ${JSON.stringify(serverAuthStatus)}`);
       }
     }
   } catch (error) {
-    BGLog(`Erreur lors de la vérification périodique: ${error.message}`, 'warn');
+    logger.warn(`Erreur lors de la vérification périodique: ${error.message}`);
   }
 }, 5 * 60 * 1000); // Vérification complète toutes les 5 minutes
 
 // Mécanisme de supervision avancé
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'systemHealthCheck') {
-    BGLog('Réception d\'une demande de vérification de santé système');
+    logger.log('Réception d\'une demande de vérification de santé système');
     
     const fullSystemCheck = async () => {
       try {
@@ -259,7 +256,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           timestamp: Date.now()
         };
       } catch (error) {
-        BGLog(`Erreur lors de la vérification système complète: ${error.message}`, 'error');
+        logger.error(`Erreur lors de la vérification système complète: ${error.message}`);
         return {
           success: false,
           error: error.message,

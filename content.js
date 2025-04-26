@@ -1,10 +1,17 @@
 // FCA-Agent - Content Script
 // Script injecté dans les pages web pour interagir avec les applications professionnelles
 
+import { createModuleLogger } from './utils/logger.js';
+
+// Création d'une instance de logger spécifique pour ce module
+const logger = createModuleLogger('content.js');
+
 // Fonction pour extraire le contenu de la page en fonction du domaine
 function extractPageContent() {
   const url = window.location.href;
   let content = { type: 'unknown', data: {} };
+  
+  logger.log(`Extraction du contenu de la page: ${url}`);
   
   // Extraction pour Gmail
   if (url.includes('mail.google.com')) {
@@ -80,7 +87,7 @@ function extractPageContent() {
 
 // Gestion des messages depuis le background script
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Message reçu dans le content script:', message);
+  logger.log(`Message reçu dans le content script: ${JSON.stringify(message)}`);
   
   if (message.action === 'getPageContent') {
     // Répond au background script avec le contenu extrait de la page
@@ -92,4 +99,4 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 });
 
 // Initialisation - log pour déboggage
-console.log('FCA-Agent content script chargé sur:', window.location.href);
+logger.log(`Content script chargé sur: ${window.location.href}`);

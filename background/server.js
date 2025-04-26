@@ -2,35 +2,10 @@
 
 import { getApiUrl } from './config.js';
 import { getAuthHeaders, setAuthenticated, getAuthStatus, checkAuthWithServer, resetAuthentication, setToken } from './auth.js';
+import { serverLog } from './server-logger.js';
 
 // État de connexion au serveur
 let isServerConnected = false;
-
-// Logger spécifique au module serveur avec améliorations
-function serverLog(message, level = 'info') {
-  const prefix = '[EXT:SERVER]';
-  const isDebug = true; // Activer pour plus de détails
-  
-  // Ajouter un timestamp pour faciliter le suivi
-  const now = new Date();
-  const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${now.getMilliseconds().toString().padStart(3, '0')}`;
-  
-  switch(level) {
-    case 'error':
-      console.error(`${prefix} [${timestamp}] ${message}`);
-      break;
-    case 'warn':
-      console.warn(`${prefix} [${timestamp}] ${message}`);
-      break;
-    case 'debug':
-      if (isDebug) {
-        console.debug(`${prefix} [${timestamp}] DEBUG: ${message}`);
-      }
-      break;
-    default:
-      console.log(`${prefix} [${timestamp}] ${message}`);
-  }
-}
 
 // Méthodes d'accès à l'état de connexion
 export function getServerStatus() {

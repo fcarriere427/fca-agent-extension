@@ -1,5 +1,7 @@
 // FCA-Agent - Module de configuration
 
+import { configLog } from './config-logger.js';
+
 // Configuration globale
 let API_BASE_URL = 'https://fca-agent.letsq.xyz/api';
 
@@ -10,6 +12,7 @@ export function getApiUrl() {
 
 export function setApiUrl(url) {
   API_BASE_URL = url;
+  configLog(`URL API modifiée: ${url}`);
   chrome.storage.local.set({ 'apiBaseUrl': API_BASE_URL });
 }
 
@@ -19,7 +22,7 @@ export function loadInitialConfig() {
     chrome.storage.local.get(['apiBaseUrl'], (result) => {
       if (result.apiBaseUrl) {
         API_BASE_URL = result.apiBaseUrl;
-        console.log('URL API chargée:', API_BASE_URL);
+        configLog(`URL API chargée: ${API_BASE_URL}`);
       }
       resolve();
     });
@@ -31,7 +34,10 @@ export function setDefaultConfig() {
   chrome.storage.local.get(['apiBaseUrl'], (result) => {
     if (!result.apiBaseUrl) {
       API_BASE_URL = 'http://fca-agent.letsq.xyz/api';
+      configLog(`URL API par défaut définie: ${API_BASE_URL}`);
       chrome.storage.local.set({ 'apiBaseUrl': API_BASE_URL });
+    } else {
+      configLog(`URL API déjà configurée: ${result.apiBaseUrl}`);
     }
   });
 }

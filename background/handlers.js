@@ -3,21 +3,7 @@
 import { getApiUrl, setApiUrl } from './config.js';
 import { getAuthStatus, loginToServer, logoutFromServer, checkAuthWithServer } from './auth.js';
 import { getServerStatus, checkServerOnline, executeTaskOnServer, forceServerCheck } from './server.js';
-
-// Logger spécifique aux gestionnaires de messages
-function handlerLog(message, level = 'info') {
-  const prefix = '[BG:HANDLER]';
-  switch(level) {
-    case 'error':
-      console.error(`${prefix} ${message}`);
-      break;
-    case 'warn':
-      console.warn(`${prefix} ${message}`);
-      break;
-    default:
-      console.log(`${prefix} ${message}`);
-  }
-}
+import { handlerLog } from './handlers-logger.js';
 
 // Gestionnaire principal de messages
 export function setupMessageHandlers() {
