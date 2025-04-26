@@ -206,11 +206,15 @@ export async function loginToServer(password) {
     broadcastAuthStatus();
     
     // 5. Vérification que le token est utilisable
-    const headers = getAuthHeaders();
-    if (!headers.Authorization) {
-      logger.error('ERREUR CRITIQUE: Token non disponible dans les headers après connexion!');
-    } else {
-      logger.log(`Vérification des headers après login: ${JSON.stringify(headers)}`);
+    try {
+      const headers = await getAuthHeaders();
+      if (!headers.Authorization) {
+        logger.error('ERREUR CRITIQUE: Token non disponible dans les headers après connexion!');
+      } else {
+        logger.log(`Vérification des headers après login: ${JSON.stringify(headers)}`);
+      }
+    } catch (error) {
+      logger.error(`Erreur lors de la vérification des headers après login: ${error.message}`);
     }
   }
   
@@ -222,12 +226,35 @@ export async function loginToServer(password) {
  * @returns {Promise<boolean>} - Résultat de la déconnexion
  */
 export async function logoutFromServer() {
-  // D'abord, mise à jour locale pour assurer la déconnexion
-  setAuthenticated(false);
-  
-  // Puis, notification au serveur (avec le token dans l'en-tête)
-  const result = await logoutRequest(getAuthHeaders());
-  return result;
+  try {
+    // Récupérer les headers avant de faire la déconnexion locale
+    // pour avoir le token si nécessaire
+    const headers = await getAuthHeaders();
+    
+    // Mise à jour locale pour assurer la déconnexion
+    setAuthenticated(false);
+    
+    // Si on n'a pas de token valide, on considère la déconnexion comme réussie
+    if (!headers.Authorization) {
+      logger.warn('Déconnexion effectuée localement uniquement (pas de token valide)');
+      return true;
+    }
+    
+    // Notification au serveur (avec le token dans l'en-tête)
+    try {
+      const result = await logoutRequest(headers);
+      return result;
+    } catch (error) {
+      logger.error(`Erreur lors de la requête de déconnexion: ${error.message}`);
+      // On considère quand même la déconnexion comme réussie localement
+      return true;
+    }
+  } catch (error) {
+    logger.error(`Exception lors de la déconnexion: ${error.message}`);
+    // On force la déconnexion locale en cas d'erreur
+    setAuthenticated(false);
+    return false;
+  }
 }
 
 /**
@@ -235,94 +262,149 @@ export async function logoutFromServer() {
  * @returns {Promise<boolean|Object>} - Résultat de la vérification
  */
 export async function checkAuthWithServer() {
-  const headers = getAuthHeaders();
-  
-  // Vérifier la disponibilité du token avant de poursuivre
-  if (!headers.Authorization && isAuthenticated) {
-    // Incohérence: on est marqué comme authentifié mais pas de token dans les headers
-    logger.error('ERREUR CRITIQUE: Marqué comme authentifié mais aucun token disponible!');
+  try {
+    // Récupération des headers d'authentification
+    const headers = await getAuthHeaders();
     
-    // Essayer de récupérer depuis le stockage de secours
-    try {
-      const backupToken = await getSessionToken();
-      if (backupToken) {
-        logger.warn('Récupération du token depuis le stockage de secours');
-        authToken = backupToken;
-        return checkAuthWithServer(); // Réessayer avec le token récupéré
-      } else {
-        // Pas de sauvegarde disponible non plus
-        logger.error('Aucun token de sauvegarde disponible, déconnexion forcée');
+    // Vérifier la disponibilité du token avant de poursuivre
+    if (!headers.Authorization && isAuthenticated) {
+      // Incohérence: on est marqué comme authentifié mais pas de token dans les headers
+      logger.error('ERREUR CRITIQUE: Marqué comme authentifié mais aucun token disponible!');
+      
+      // Essayer de récupérer depuis le stockage de secours
+      try {
+        const backupToken = await getSessionToken();
+        if (backupToken) {
+          logger.warn('Récupération du token depuis le stockage de secours');
+          authToken = backupToken;
+          return checkAuthWithServer(); // Réessayer avec le token récupéré
+        } else {
+          // Pas de sauvegarde disponible non plus
+          logger.error('Aucun token de sauvegarde disponible, déconnexion forcée');
+          resetAuthentication();
+          return false;
+        }
+      } catch (error) {
+        logger.error(`Erreur lors de la récupération du token de secours: ${error.message}`);
         resetAuthentication();
         return false;
       }
-    } catch (error) {
-      logger.error(`Erreur lors de la récupération du token de secours: ${error.message}`);
-      resetAuthentication();
+    }
+    
+    // Si on n'a pas de token, impossible de faire la requête
+    if (!headers.Authorization) {
+      logger.error('Impossible de vérifier l\'authentification sans token');
       return false;
     }
-  }
-  
-  const result = await checkAuthRequest(headers);
-  
-  // Traitement du résultat
-  if (result === true || result === false) {
-    // Si le serveur nous dit que le statut a changé
-    if (result !== isAuthenticated) {
-      logger.log(`Mise à jour du statut local: ${isAuthenticated} -> ${result}`);
-      if (result) {
-        // Si le serveur nous dit qu'on est authentifié mais qu'on ne l'était pas avant
-        isAuthenticated = true;
-        if (!authToken) {
-          authToken = `server_validated_${Date.now()}`;
-          saveTokenToStorage(authToken);
+    
+    // Requête de vérification d'authentification
+    try {
+      const result = await checkAuthRequest(headers);
+      
+      // Traitement du résultat
+      if (result === true || result === false) {
+        // Si le serveur nous dit que le statut a changé
+        if (result !== isAuthenticated) {
+          logger.log(`Mise à jour du statut local: ${isAuthenticated} -> ${result}`);
+          if (result) {
+            // Si le serveur nous dit qu'on est authentifié mais qu'on ne l'était pas avant
+            isAuthenticated = true;
+            if (!authToken) {
+              authToken = `server_validated_${Date.now()}`;
+              saveTokenToStorage(authToken);
+            }
+          } else {
+            // Si le serveur nous dit qu'on n'est pas authentifié, on efface le token
+            resetAuthentication();
+          }
+          broadcastAuthStatus();
         }
-      } else {
-        // Si le serveur nous dit qu'on n'est pas authentifié, on efface le token
+        return result;
+      } else if (result && result.unauthorized) {
+        // Token invalide ou expiré
+        logger.warn('Token invalide ou expiré, déconnexion forcée');
         resetAuthentication();
+        return false;
+      } else if (result && result.noChange) {
+        // Aucun changement, on conserve l'état actuel
+        return isAuthenticated;
+      } else if (result && result.error) {
+        // Erreur de connexion, conserver l'état local
+        logger.error(`Erreur lors de la vérification: ${result.message}`);
+        return isAuthenticated;
       }
-      broadcastAuthStatus();
+      
+      // Par défaut, on garde l'état actuel
+      return isAuthenticated;
+    } catch (requestError) {
+      logger.error(`Erreur lors de la requête de vérification: ${requestError.message}`);
+      // En cas d'erreur réseau, on maintient l'état actuel
+      return isAuthenticated;
     }
-    return result;
-  } else if (result && result.unauthorized) {
-    // Token invalide ou expiré
-    logger.warn('Token invalide ou expiré, déconnexion forcée');
-    resetAuthentication();
-    return false;
-  } else if (result && result.noChange) {
-    // Aucun changement, on conserve l'état actuel
-    return isAuthenticated;
-  } else if (result && result.error) {
-    // Erreur de connexion, conserver l'état local
-    logger.error(`Erreur lors de la vérification: ${result.message}`);
+  } catch (globalError) {
+    logger.error(`Exception globale lors de la vérification d'authentification: ${globalError.message}`);
+    // En cas d'erreur grave, on garde l'état d'authentification actuel
     return isAuthenticated;
   }
-  
-  // Par défaut, on garde l'état actuel
-  return isAuthenticated;
 }
 
 /**
  * Fournit les en-têtes d'authentification pour les requêtes API
  * @returns {Object} - En-têtes avec le token d'authentification
  */
-export function getAuthHeaders() {
+export async function getAuthHeaders() {
   if (!authToken) {
     logger.warn('WARNING: getAuthHeaders appelé sans token disponible!');
-    // Tentative de récupération synchrone depuis une variable de sauvegarde
-    const backupToken = getBackupToken();
-    if (backupToken) {
-      logger.warn(`Récupération d'urgence du token depuis la sauvegarde de session`);
-      authToken = backupToken;
-      isAuthenticated = true;
-    } else {
-      logger.error('ERREUR CRITIQUE: Aucun token disponible, authentification compromise');
-      // IMPORTANT: Déclencher un rechargement d'authentification depuis le stockage
-      setTimeout(() => { loadAuthState(); }, 100);
-      return {};
+    
+    // Tentative de récupération asynchrone depuis le stockage de session
+    try {
+      const sessionToken = await getSessionToken();
+      if (sessionToken) {
+        logger.warn(`Récupération d'urgence du token depuis la sauvegarde de session`);
+        authToken = sessionToken;
+        isAuthenticated = true;
+        return { 'Authorization': `Bearer ${authToken}` };
+      }
+    } catch (error) {
+      logger.error(`Erreur lors de la récupération du token de session: ${error.message}`);
     }
+    
+    // Tentative de récupération depuis le stockage local si la session a échoué
+    try {
+      const localToken = await loadTokenFromStorage();
+      if (localToken) {
+        logger.warn(`Récupération d'urgence du token depuis le stockage local`);
+        authToken = localToken;
+        isAuthenticated = true;
+        return { 'Authorization': `Bearer ${authToken}` };
+      }
+    } catch (error) {
+      logger.error(`Erreur lors de la récupération du token local: ${error.message}`);
+    }
+    
+    logger.error('ERREUR CRITIQUE: Aucun token disponible, authentification compromise');
+    // IMPORTANT: Déclencher un rechargement d'authentification depuis le stockage
+    setTimeout(() => { loadAuthState(); }, 100);
+    return {};
   }
   
   logger.log(`Génération des headers d'authentification avec token: ${authToken.substring(0, 4)}...${authToken.substring(authToken.length-4)}`);
+  return { 'Authorization': `Bearer ${authToken}` };
+}
+
+/**
+ * Version synchrone de getAuthHeaders pour les cas où on ne peut pas attendre
+ * Cette fonction NE FAIT PAS de récupération d'urgence mais renvoie simplement les headers
+ * avec le token actuellement en mémoire, ou un objet vide s'il n'y a pas de token
+ * @returns {Object} - En-têtes avec le token d'authentification
+ */
+export function getAuthHeadersSync() {
+  if (!authToken) {
+    logger.warn('WARNING: getAuthHeadersSync appelé sans token disponible!');
+    return {};
+  }
+  
+  logger.log(`Génération synchrone des headers d'authentification avec token: ${authToken.substring(0, 4)}...${authToken.substring(authToken.length-4)}`);
   return { 'Authorization': `Bearer ${authToken}` };
 }
 
@@ -333,18 +415,26 @@ export function getAuthHeaders() {
 export async function handleTokenInconsistency() {
   logger.log('Début de la récupération de token');
   
-  // Essayer de récupérer depuis sessionStorage
-  const backupToken = getBackupToken();
-  if (backupToken) {
-    logger.warn('Récupération du token de sauvegarde');
-    return setToken(backupToken);
+  // Essayer de récupérer depuis le stockage de session (chrome.storage.session)
+  try {
+    const sessionToken = await getSessionToken();
+    if (sessionToken) {
+      logger.warn('Récupération du token depuis le stockage de session');
+      return setToken(sessionToken);
+    }
+  } catch (sessionError) {
+    logger.error(`Erreur lors de la récupération du token de session: ${sessionError.message}`);
   }
   
   // Essayer de récupérer depuis le stockage local
-  const storedToken = await loadTokenFromStorage();
-  if (storedToken) {
-    logger.warn('Récupération du token stocké localement');
-    return setToken(storedToken);
+  try {
+    const storedToken = await loadTokenFromStorage();
+    if (storedToken) {
+      logger.warn('Récupération du token stocké localement');
+      return setToken(storedToken);
+    }
+  } catch (storageError) {
+    logger.error(`Erreur lors de la récupération du token local: ${storageError.message}`);
   }
   
   // Aucun token disponible

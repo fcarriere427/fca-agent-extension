@@ -52,7 +52,8 @@ async function verifySystemIntegrity(authStatus) {
         
         try {
           const authModule = await import('./background/auth.js');
-          authHeaders = authModule.getAuthHeaders();
+          // Utilisation de la nouvelle version asynchrone de getAuthHeaders
+          authHeaders = await authModule.getAuthHeaders();
           
           if (authHeaders && authHeaders.Authorization) {
             logger.log(`Headers d'authentification obtenus après ${headerAttempts + 1} tentative(s)`);
@@ -78,7 +79,7 @@ async function verifySystemIntegrity(authStatus) {
           if (recovered) {
             logger.warn('Récupération d\'urgence réussie, système restauré');
             // Vérification que la récupération a fonctionné
-            const newHeaders = authModule.getAuthHeaders();
+            const newHeaders = await authModule.getAuthHeaders();
             if (newHeaders && newHeaders.Authorization) {
               logger.log('Cohérence restaurée après récupération');
               isSystemConsistent = true;
@@ -145,32 +146,37 @@ async function initializeAuth() {
       logger.log('Authentifié localement, vérification avec le serveur...');
       
       // Vérification des headers pour s'assurer que le token est disponible
-      const headers = await import('./background/auth.js').then(module => module.getAuthHeaders());
-      if (!headers.Authorization) {
-        logger.error('ALERTE: Token manquant dans les headers alors que marqué comme authentifié!');
-        // Tentative de récupération d'urgence
-        const recoveryResult = await import('./background/auth.js').then(module => {
-          return new Promise(resolve => {
-            chrome.storage.local.get(['authToken'], (result) => {
+      try {
+        const authModule = await import('./background/auth.js');
+        const headers = await authModule.getAuthHeaders();
+        
+        if (!headers.Authorization) {
+          logger.error('ALERTE: Token manquant dans les headers alors que marqué comme authentifié!');
+          // Tentative de récupération d'urgence
+          const recoveryResult = await new Promise(resolve => {
+            chrome.storage.local.get(['authToken'], async (result) => {
               if (result && result.authToken) {
                 logger.log(`Token trouvé dans le stockage: ${result.authToken.substring(0, 4)}...${result.authToken.substring(result.authToken.length-4)}`);
-                module.setToken(result.authToken);
+                await authModule.setToken(result.authToken);
                 resolve(true);
               } else {
                 logger.error('Aucun token trouvé dans le stockage, déconnexion forcée');
-                module.resetAuthentication();
+                await authModule.resetAuthentication();
                 resolve(false);
               }
             });
           });
-        });
-        
-        if (!recoveryResult) {
-          logger.error('Récupération d\'urgence du token échouée');
-          return { isAuthenticated: false, hasToken: false };
+          
+          if (!recoveryResult) {
+            logger.error('Récupération d\'urgence du token échouée');
+            return { isAuthenticated: false, hasToken: false };
+          }
+        } else {
+          logger.log(`Token disponible: ${headers.Authorization.substring(0, 15)}...`);
         }
-      } else {
-        logger.log(`Token disponible: ${headers.Authorization.substring(0, 15)}...`);
+      } catch (headerError) {
+        logger.error(`Erreur lors de la récupération des headers: ${headerError.message}`);
+        return { isAuthenticated: false, hasToken: false };
       }
       
       // Vérification avec le serveur pour confirmer validité
@@ -404,12 +410,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         const serverStatus = serverModule.getServerStatus();
         
         // Vérifications complètes
-        const authCheck = authStatus.isAuthenticated ? await authModule.checkAuthWithServer() : false;
+        let authCheck = false;
+        if (authStatus.isAuthenticated) {
+          try {
+            authCheck = await authModule.checkAuthWithServer();
+          } catch (authError) {
+            logger.error(`Erreur lors de la vérification d'authentification: ${authError.message}`);
+          }
+        }
+        
         const serverCheck = await serverModule.forceServerCheck();
         
         // Tentative de récupération si nécessaire
-        if (!authCheck) {
-          await authModule.handleTokenInconsistency();
+        if (authStatus.isAuthenticated && !authCheck) {
+          try {
+            await authModule.handleTokenInconsistency();
+          } catch (recoveryError) {
+            logger.error(`Erreur lors de la tentative de récupération: ${recoveryError.message}`);
+          }
         }
         
         return {
