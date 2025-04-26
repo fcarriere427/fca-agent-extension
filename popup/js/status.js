@@ -1,22 +1,9 @@
 // FCA-Agent - Module de gestion des indicateurs de statut
 
+import { statusLog } from './status-logger.js';
+
 let authIndicator;
 let serverIndicator;
-
-// Logger spécifique aux statuts
-function statusLog(message, level = 'info') {
-  const prefix = '[UI:STATUS]';
-  switch(level) {
-    case 'error':
-      console.error(`${prefix} ${message}`);
-      break;
-    case 'warn':
-      console.warn(`${prefix} ${message}`);
-      break;
-    default:
-      console.log(`${prefix} ${message}`);
-  }
-}
 
 /**
  * Initialise les indicateurs de statut

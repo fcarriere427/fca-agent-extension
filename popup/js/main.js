@@ -5,21 +5,7 @@ import { initStatusIndicators } from './status.js';
 import { setupMessageHandlers } from '../../background/handlers.js';
 import { setupTaskHandlers } from './task-handlers.js';  // Chemin corrigé
 import { initUI } from './ui.js';
-
-// Logger spécifique au script principal
-function mainLog(message, level = 'info') {
-  const prefix = '[UI:MAIN]';
-  switch(level) {
-    case 'error':
-      console.error(`${prefix} ${message}`);
-      break;
-    case 'warn':
-      console.warn(`${prefix} ${message}`);
-      break;
-    default:
-      console.log(`${prefix} ${message}`);
-  }
-}
+import { mainLog } from './main-logger.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   mainLog('Initialisation du popup UI...');

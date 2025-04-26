@@ -1,30 +1,6 @@
 // FCA-Agent - Module d'authentification
 
-// Logger spécifique à l'authentification UI
-function authUiLog(message, level = 'info') {
-  const prefix = '[UI:AUTH]';
-  const isDebug = true; // Activer pour plus de détails
-  
-  // Ajouter un timestamp pour faciliter le suivi
-  const now = new Date();
-  const timestamp = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}:${now.getSeconds().toString().padStart(2, '0')}.${now.getMilliseconds().toString().padStart(3, '0')}`;
-  
-  switch(level) {
-    case 'error':
-      console.error(`${prefix} [${timestamp}] ${message}`);
-      break;
-    case 'warn':
-      console.warn(`${prefix} [${timestamp}] ${message}`);
-      break;
-    case 'debug':
-      if (isDebug) {
-        console.debug(`${prefix} [${timestamp}] DEBUG: ${message}`);
-      }
-      break;
-    default:
-      console.log(`${prefix} [${timestamp}] ${message}`);
-  }
-}
+import { authUiLog } from './auth-logger.js';
 
 /**
  * Vérifie que l'utilisateur est authentifié

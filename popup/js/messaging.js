@@ -1,5 +1,7 @@
 // FCA-Agent - Module de gestion des messages
 
+import { messagingLog } from './messaging-logger.js';
+
 // Référence à la zone de réponse
 let responseArea;
 
@@ -8,6 +10,7 @@ let responseArea;
  * @param {HTMLElement} responseAreaElement - Élément DOM de la zone de réponse
  */
 export function initMessaging(responseAreaElement) {
+  messagingLog('Initialisation de la messagerie');
   responseArea = responseAreaElement;
   
   // Ajouter un style pour les conteneurs de messages
@@ -49,9 +52,11 @@ export function initMessaging(responseAreaElement) {
  */
 export function displayMessage(sender, text) {
   if (!responseArea) {
-    console.error('Zone de réponse non initialisée');
+    messagingLog('Zone de réponse non initialisée', 'error');
     return null;
   }
+
+  messagingLog(`Affichage d'un message de ${sender}`);
 
   // Supprimer le message de bienvenue s'il existe
   const welcomeMessage = responseArea.querySelector('.welcome-message');
@@ -90,6 +95,7 @@ export function displayMessage(sender, text) {
   // Scroll vers le bas
   responseArea.scrollTop = responseArea.scrollHeight;
   
+  messagingLog(`Message affiché avec ID: ${messageId}`);
   return messageId;
 }
 
@@ -99,13 +105,18 @@ export function displayMessage(sender, text) {
  */
 export function removeMessage(messageId) {
   if (!responseArea) {
-    console.error('Zone de réponse non initialisée');
+    messagingLog('Zone de réponse non initialisée', 'error');
     return;
   }
+
+  messagingLog(`Suppression du message: ${messageId}`);
 
   const message = document.getElementById(messageId);
   if (message) {
     responseArea.removeChild(message);
+    messagingLog(`Message ${messageId} supprimé`);
+  } else {
+    messagingLog(`Message ${messageId} introuvable`, 'warn');
   }
 }
 
@@ -115,6 +126,7 @@ export function removeMessage(messageId) {
  * @returns {string} ID du message créé
  */
 export function displayLoadingMessage(text = 'En cours de traitement...') {
+  messagingLog('Affichage d\'un message de chargement');
   return displayMessage('assistant', `${text} <div class="loading-spinner"></div>`);
 }
 
@@ -123,6 +135,7 @@ export function displayLoadingMessage(text = 'En cours de traitement...') {
  * @param {string} errorMessage - Message d'erreur
  */
 export function displayErrorMessage(errorMessage, responseId = null) {
+  messagingLog(`Affichage d'un message d'erreur: ${errorMessage}`, 'error');
   let message = `Erreur : ${errorMessage}`;  
   displayMessage('assistant', message);
 }

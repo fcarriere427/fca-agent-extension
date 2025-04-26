@@ -3,6 +3,7 @@ import { handleLogout } from './auth.js';
 import { checkServerConnection } from '../../utils/api.js';
 import { displayMessage } from './messaging.js';
 import { processUserInput } from './tasks/generalTasks.js';
+import { uiLog } from './ui-logger.js';
 
 // Référence aux éléments de l'interface
 let userInput;
@@ -14,6 +15,7 @@ let quickTaskButtons;
  * @param {Object} elements - Éléments DOM à initialiser
  */
 export function initUI(elements) {
+  uiLog('Initialisation de l\'interface utilisateur');
   userInput = elements.userInput;
   submitBtn = elements.submitBtn;
   quickTaskButtons = elements.quickTaskButtons;
@@ -23,6 +25,7 @@ export function initUI(elements) {
  * Configure l'interface utilisateur et les gestionnaires d'événements
  */
 export function setupUI() {
+  uiLog('Configuration de l\'interface utilisateur');
   // Gestionnaire pour soumettre l'entrée utilisateur
   submitBtn.addEventListener('click', () => {
     processUserInput(userInput.value.trim());
@@ -67,15 +70,18 @@ export function setupUI() {
     }
   `;
   document.head.appendChild(style);
+  uiLog('Styles de l\'interface utilisateur appliqués');
   
   // Gestionnaires pour les boutons d'actions rapides
   quickTaskButtons.forEach(button => {
     button.addEventListener('click', () => {
       const taskType = button.getAttribute('data-task');
+      uiLog(`Bouton d'action rapide cliqué: ${taskType}`);
       executeQuickTask(taskType);
     });
   });
   
+  uiLog('Configuration de l\'interface utilisateur terminée');
   // La gestion des indicateurs est désormais déléguée au module status.js
 }
 
@@ -86,15 +92,19 @@ export function setupUI() {
  * @param {string} taskType - Type de tâche à exécuter
  */
 function executeQuickTask(taskType) {
+  uiLog(`Exécution de la tâche rapide: ${taskType}`);
   // Importer dynamiquement le module de tâche approprié
   switch(taskType) {
     case 'gmail-summary':
       import('./tasks/gmailTasks.js')
         .then(module => module.executeGmailSummaryTask())
-        .catch(error => displayMessage('assistant', `Erreur: ${error.message}`));
+        .catch(error => {
+          uiLog(`Erreur lors de l'exécution de la tâche ${taskType}: ${error.message}`, 'error');
+          displayMessage('assistant', `Erreur: ${error.message}`);
+        });
       break;
       
     default:
-      console.error(`Type de tâche inconnu: ${taskType}`);
+      uiLog(`Type de tâche inconnu: ${taskType}`, 'error');
   }
 }
