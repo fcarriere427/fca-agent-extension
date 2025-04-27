@@ -37,25 +37,22 @@ export async function checkServerConnection() {
 }
 
 /**
- * Vérifie l'état d'authentification actuel
+ * Vérifie l'état d'authentification actuel (toujours vrai avec clé API fixe)
  * @returns {Promise<boolean>} État d'authentification
  */
 export async function checkAuthentication() {
   try {
+    // Vérification du serveur uniquement (pas d'authentification avec clé API fixe)
     const apiBaseUrl = await getApiBaseUrl();
-    const response = await fetch(`${apiBaseUrl}/auth/check`, { 
+    const response = await fetch(`${apiBaseUrl}/status`, { 
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include'
+      headers: { 'Content-Type': 'application/json' }
     });
     
-    if (response.ok) {
-      const data = await response.json();
-      return data.authenticated === true;
-    }
-    return false;
+    // Si le serveur est accessible, l'authentification est toujours valide avec clé API fixe
+    return response.ok;
   } catch (error) {
-    console.error("Erreur lors de la vérification d'authentification:", error);
+    console.error("Erreur lors de la vérification de connexion au serveur:", error);
     return false;
   }
 }
@@ -166,24 +163,20 @@ class ApiClient {
   
   // Vérifier l'authentification
   async checkAuthentication() {
+    // Avec clé API fixe, vérifier uniquement la connexion au serveur
     try {
-      const response = await this.get('auth/check');
-      return response.authenticated === true;
+      await this.get('status');
+      return true; // Si le serveur répond, l'authentification est toujours valide avec clé API fixe
     } catch (error) {
-      console.error("Erreur lors de la vérification d'authentification:", error);
+      console.error("Erreur lors de la vérification de connexion au serveur:", error);
       return false;
     }
   }
   
   // Déconnexion
   async logout() {
-    try {
-      await this.post('auth/logout', {});
-      return true;
-    } catch (error) {
-      console.error('Erreur lors de la déconnexion:', error);
-      return false;
-    }
+    // Avec clé API fixe, la déconnexion ne fait rien
+    return true;
   }
 }
 

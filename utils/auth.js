@@ -1,57 +1,37 @@
-// FCA-Agent - Utilitaire d'authentification (version simplifiée)
+// FCA-Agent - Utilitaire d'authentification (version avec clé API fixe uniquement)
 
 /**
- * Vérifie si l'utilisateur est authentifié
- * @returns {Promise<boolean>} - Vrai si l'utilisateur est authentifié
+ * Vérifie si l'utilisateur est authentifié (avec clé API fixe, c'est toujours le cas)
+ * @returns {Promise<boolean>} - Toujours vrai car clé API fixe
  */
 async function isAuthenticated() {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action: 'checkAuthentication' }, (response) => {
-      resolve(response && response.authenticated === true);
-    });
-  });
+  return true; // Avec une clé API fixe, toujours authentifié
 }
 
 /**
- * Récupère les informations de l'utilisateur connecté
- * @returns {Promise<Object|null>} - Les données utilisateur ou null si non connecté
+ * Récupère les informations de l'utilisateur (version avec clé API fixe)
+ * @returns {Promise<Object>} - Information d'authentification avec clé API fixe
  */
 async function getUserData() {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action: 'getUserData' }, (response) => {
-      if (response && response.isAuthenticated) {
-        resolve({ isAuthenticated: true });
-      } else {
-        resolve(null);
-      }
-    });
-  });
+  return { isAuthenticated: true }; // Toujours authentifié avec clé API fixe
 }
 
 /**
- * Déconnecte l'utilisateur
- * @returns {Promise<boolean>} - Vrai si la déconnexion a réussi
+ * Fonction conservée pour compatibilité (ne fait rien avec clé API fixe)
+ * @returns {Promise<boolean>} - Toujours vrai
  */
 async function logout() {
-  return new Promise((resolve) => {
-    chrome.runtime.sendMessage({ action: 'logout' }, (response) => {
-      resolve(response && response.success === true);
-    });
-  });
+  return true; // Ne fait rien avec clé API fixe
 }
 
 /**
- * Vérifie l'authentification et redirige vers la page de connexion si non authentifié
- * @param {string} loginPath - Chemin vers la page de connexion
- * @returns {Promise<boolean>} - Vrai si l'utilisateur est authentifié
+ * Fonction maintenue pour compatibilité (avec clé API fixe, toujours authentifié)
+ * @param {string} loginPath - Chemin vers la page de connexion (non utilisé)
+ * @returns {Promise<boolean>} - Toujours vrai avec clé API fixe
  */
 async function requireAuth(loginPath = 'login/login.html') {
-  const isAuth = await isAuthenticated();
-  if (!isAuth && window.location.href.indexOf(loginPath) === -1) {
-    window.location.href = loginPath;
-    return false;
-  }
-  return isAuth;
+  // Avec clé API fixe, toujours authentifié, pas besoin de redirection
+  return true;
 }
 
 export {

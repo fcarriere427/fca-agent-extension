@@ -2,7 +2,7 @@
 // Ce module gère le traitement des messages entre les différentes parties de l'extension
 
 import { getApiUrl, setApiUrl } from './config.js';
-import { getAuthHeaders, isAuthConfigured } from './auth-headers.js';
+import { getAuthHeaders } from './auth-headers.js';
 import { 
   getServerStatus, 
   checkServerOnline, 
@@ -106,17 +106,17 @@ async function handleGetStatus(sendResponse) {
   try {
     logger.debug('Traitement de la demande de statut global');
     
-    // Vérification complète du serveur et de la clé API
+    // Vérification complète du serveur
     await checkServerOnline();
     
     // Récupérer le statut complet du serveur
     const fullStatus = getServerStatus();
     
-    // Formater la réponse pour la compatibilité avec l'ancien format
+    // Formater la réponse avec authentification toujours valide
     const response = { 
       status: fullStatus.isConnected ? 'connected' : 'disconnected',
-      authenticated: fullStatus.authValid === true,
-      authValid: fullStatus.authValid,
+      authenticated: true, // Toujours authentifié avec clé API fixe
+      authValid: true, // Toujours valide avec clé API fixe
       statusCode: fullStatus.statusCode,
       lastCheck: fullStatus.lastCheck,
       error: fullStatus.error,
@@ -124,8 +124,7 @@ async function handleGetStatus(sendResponse) {
     };
     
     logger.info('Statut global récupéré avec succès', {
-      connected: response.status === 'connected',
-      authenticated: response.authenticated
+      connected: response.status === 'connected'
     });
     
     sendResponse(response);
@@ -133,8 +132,8 @@ async function handleGetStatus(sendResponse) {
     logger.error('Erreur lors de la récupération du statut global', null, error);
     sendResponse({ 
       status: 'disconnected', 
-      authenticated: false,
-      authValid: null,
+      authenticated: true, // Toujours authentifié avec clé API fixe
+      authValid: true, // Toujours valide avec clé API fixe  
       error: true,
       message: error.message 
     });
@@ -147,28 +146,19 @@ async function handleGetStatus(sendResponse) {
  * @returns {void}
  */
 function handleGetAuthStatus(sendResponse) {
-  try {
-    logger.debug('Traitement de la demande de statut d\'authentification');
-    
-    const serverStatus = getServerStatus();
-    const authStatus = {
-      isAuthenticated: serverStatus.authValid === true,
-      serverStatus: serverStatus // Inclure le statut complet du serveur
-    };
-    
-    logger.info('Statut d\'authentification récupéré', { 
-      isAuthenticated: authStatus.isAuthenticated 
-    });
-    
-    sendResponse(authStatus);
-  } catch (error) {
-    logger.error('Erreur lors de la récupération du statut d\'authentification', null, error);
-    sendResponse({ 
-      isAuthenticated: false,
-      error: true,
-      message: error.message 
-    });
-  }
+  logger.debug('Traitement de la demande de statut d\'authentification');
+  
+  const serverStatus = getServerStatus();
+  const authStatus = {
+    isAuthenticated: true, // Toujours authentifié avec clé API fixe
+    serverStatus: {
+      ...serverStatus,
+      authValid: true // Toujours valide avec clé API fixe
+    }
+  };
+  
+  logger.info('Statut d\'authentification récupéré');
+  sendResponse(authStatus);
 }
 
 /**
@@ -182,15 +172,22 @@ function handleGetServerStatus(sendResponse) {
     
     const serverStatus = getServerStatus();
     
+    // Modifier le statut pour toujours indiquer que l'authentification est valide
+    const modifiedStatus = {
+      ...serverStatus,
+      authValid: true // Toujours valide avec clé API fixe
+    };
+    
     logger.info('Statut du serveur récupéré', { 
-      isConnected: serverStatus.isConnected 
+      isConnected: modifiedStatus.isConnected 
     });
     
-    sendResponse(serverStatus);
+    sendResponse(modifiedStatus);
   } catch (error) {
     logger.error('Erreur lors de la récupération du statut du serveur', null, error);
     sendResponse({ 
       isConnected: false,
+      authValid: true, // Toujours valide avec clé API fixe
       error: true,
       message: error.message 
     });
@@ -207,12 +204,6 @@ function handleGetServerStatus(sendResponse) {
 async function handleExecuteTask(taskType, taskData, sendResponse) {
   try {
     logger.info('Exécution d\'une tâche demandée', { type: taskType });
-    
-    // Vérifier si la clé API est configurée (comme authentification simplifiée)
-    if (!isAuthConfigured()) {
-      logger.warn('Exécution de tâche impossible: clé API non configurée');
-      throw new Error('Clé API non configurée');
-    }
     
     // Exécuter la tâche sur le serveur
     logger.debug(`Exécution de la tâche sur le serveur`, { type: taskType });
@@ -236,16 +227,23 @@ async function handleCheckServerOnline(sendResponse) {
     logger.debug('Vérification de la connexion au serveur');
     
     const isOnline = await checkServerOnline();
+    const serverStatus = getServerStatus();
+    
+    // Modifier le statut pour toujours indiquer que l'authentification est valide
+    const modifiedStatus = {
+      ...serverStatus,
+      authValid: true // Toujours valide avec clé API fixe
+    };
     
     logger.info('Statut de connexion au serveur vérifié', { isOnline });
-    sendResponse({ isConnected: isOnline, ...getServerStatus() });
+    sendResponse({ isConnected: isOnline, ...modifiedStatus });
   } catch (error) {
     logger.error('Erreur lors de la vérification de la connexion au serveur', null, error);
     sendResponse({ 
       isConnected: false, 
+      authValid: true, // Toujours valide avec clé API fixe
       error: true, 
-      message: error.message,
-      ...getServerStatus()
+      message: error.message
     });
   }
 }
@@ -260,80 +258,60 @@ async function handleForceServerCheck(sendResponse) {
     logger.info('Vérification forcée de la connexion au serveur');
     
     const isOnline = await forceServerCheck();
+    const serverStatus = getServerStatus();
+    
+    // Modifier le statut pour toujours indiquer que l'authentification est valide
+    const modifiedStatus = {
+      ...serverStatus,
+      authValid: true // Toujours valide avec clé API fixe
+    };
     
     logger.info('Vérification forcée terminée', { isOnline });
     sendResponse({ 
       isConnected: isOnline, 
       forced: true,
-      ...getServerStatus()
+      ...modifiedStatus
     });
   } catch (error) {
     logger.error('Erreur lors de la vérification forcée du serveur', null, error);
     sendResponse({ 
       isConnected: false, 
+      authValid: true, // Toujours valide avec clé API fixe
       error: true, 
       forced: true,
-      message: error.message,
-      ...getServerStatus()
+      message: error.message
     });
   }
 }
 
 /**
- * Gère une demande de connexion
+ * Gère une demande de connexion (simplifiée pour clé API fixe)
  * @param {Function} sendResponse - Fonction de callback pour envoyer la réponse
  * @returns {void}
  */
 function handleLogin(sendResponse) {
-  try {
-    logger.info('Demande de connexion (authentification avec clé API fixe)');
-    
-    // Simuler login pour clé API fixe
-    sendResponse({ 
-      success: true, 
-      message: 'Authentification réussie avec clé API fixe'
-    });
-  } catch (error) {
-    logger.error('Erreur lors de la connexion', null, error);
-    sendResponse({ success: false, error: error.message });
-  }
+  logger.info('Demande de connexion (toujours authentifié avec clé API fixe)');
+  sendResponse({ success: true, authenticated: true });
 }
 
 /**
- * Gère une demande de déconnexion
+ * Gère une demande de déconnexion (simplifiée pour clé API fixe)
  * @param {Function} sendResponse - Fonction de callback pour envoyer la réponse
  * @returns {void}
  */
 function handleLogout(sendResponse) {
-  try {
-    logger.info('Demande de déconnexion (simulation avec clé API fixe)');
-    
-    // Simuler logout pour clé API fixe (ne fait rien)
-    sendResponse({ success: true, message: 'Déconnexion simulée' });
-  } catch (error) {
-    logger.error('Erreur lors de la déconnexion', null, error);
-    sendResponse({ success: false, error: error.message });
-  }
+  logger.info('Demande de déconnexion (sans effet avec clé API fixe)');
+  sendResponse({ success: true });
 }
 
 /**
- * Vérifie l'état de l'authentification
+ * Vérifie l'état de l'authentification (simplifiée pour clé API fixe)
  * @param {Function} sendResponse - Fonction de callback pour envoyer la réponse
  * @returns {void}
  */
 function handleCheckAuthentication(sendResponse) {
-  try {
-    logger.debug('Vérification de l\'état d\'authentification');
-    
-    // Avec une clé API fixe, l'authentification est toujours valide si configurée
-    const authenticated = isAuthConfigured();
-    
-    logger.info('État d\'authentification vérifié', { authenticated });
-    sendResponse({ authenticated });
-  } catch (error) {
-    logger.error('Erreur lors de la vérification de l\'authentification', null, error);
-    sendResponse({ authenticated: false, error: error.message });
-  }
+  logger.debug('Vérification de l\'authentification (toujours vrai avec clé API fixe)');
+  sendResponse({ authenticated: true });
 }
 
 /**
@@ -384,12 +362,15 @@ function handleGetAuthAndServerStatus(sendResponse) {
   try {
     logger.debug('Récupération des statuts d\'authentification et du serveur');
     
-    // Renvoyer simplement le statut complet du serveur qui inclut désormais l'authentification
-    const fullServerStatus = getServerStatus();
+    // Récupérer le statut du serveur et toujours indiquer que l'authentification est valide
+    const serverStatus = getServerStatus();
+    const fullServerStatus = {
+      ...serverStatus,
+      authValid: true // Toujours valide avec clé API fixe
+    };
     
     logger.info('Statuts d\'authentification et du serveur récupérés', {
-      isConnected: fullServerStatus.isConnected,
-      authValid: fullServerStatus.authValid
+      isConnected: fullServerStatus.isConnected
     });
     
     sendResponse(fullServerStatus);
@@ -397,7 +378,7 @@ function handleGetAuthAndServerStatus(sendResponse) {
     logger.error('Erreur lors de la récupération des statuts', null, error);
     sendResponse({ 
       isConnected: false, 
-      authValid: false, 
+      authValid: true, // Toujours valide avec clé API fixe
       error: true, 
       message: error.message 
     });
@@ -410,32 +391,18 @@ function handleGetAuthAndServerStatus(sendResponse) {
  * @returns {void}
  */
 function handleServerStatusChanged(sendResponse) {
-  try {
-    logger.debug('Notification de changement de statut du serveur reçue');
-    
-    // Gestion passive des notifications de changement d'état
-    sendResponse({ acknowledged: true });
-  } catch (error) {
-    logger.error('Erreur lors du traitement de la notification de changement de statut du serveur', null, error);
-    sendResponse({ acknowledged: false, error: error.message });
-  }
+  logger.debug('Notification de changement de statut du serveur reçue');
+  sendResponse({ acknowledged: true });
 }
 
 /**
- * Gère les notifications de changement de statut d'authentification
+ * Gère les notifications de changement de statut d'authentification (sans effet avec clé API fixe)
  * @param {Function} sendResponse - Fonction de callback pour envoyer la réponse
  * @returns {void}
  */
 function handleAuthStatusChanged(sendResponse) {
-  try {
-    logger.debug('Notification de changement de statut d\'authentification reçue');
-    
-    // Gestion passive des notifications de changement d'état d'authentification
-    sendResponse({ acknowledged: true });
-  } catch (error) {
-    logger.error('Erreur lors du traitement de la notification de changement de statut d\'authentification', null, error);
-    sendResponse({ acknowledged: false, error: error.message });
-  }
+  logger.debug('Notification de changement de statut d\'authentification reçue (sans effet avec clé API fixe)');
+  sendResponse({ acknowledged: true });
 }
 
 /**

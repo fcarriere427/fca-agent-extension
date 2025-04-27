@@ -5,7 +5,7 @@ import { getApiKey } from './api-key.js';
 import { createLogger } from '../utils/logger.js';
 
 // Création d'une instance de logger spécifique pour ce module
-const logger = createLogger('auth-headers');
+const logger = createLogger("auth-headers");
 
 /**
  * Retourne les en-têtes d'authentification avec la clé API
@@ -16,13 +16,13 @@ const logger = createLogger('auth-headers');
  */
 export async function getAuthHeaders(options = {}) {
   try {
-    logger.debug('Génération des en-têtes d'authentification');
+    logger.debug("Génération des en-têtes d'authentification");
     
     const apiKey = await getApiKey();
     
     if (!apiKey) {
-      logger.warn('Tentative de génération d'en-têtes avec une clé API non définie');
-      throw new Error('Clé API non définie');
+      logger.warn("Tentative de génération d'en-têtes avec une clé API non définie");
+      throw new Error("Clé API non définie");
     }
     
     const headers = { 
@@ -33,16 +33,16 @@ export async function getAuthHeaders(options = {}) {
     
     // Ajouter l'authentification Basic si demandée
     if (options.includeBasic) {
-      const basicAuth = btoa('api:' + apiKey);
+      const basicAuth = btoa("api:' + apiKey");
       headers['X-Basic-Auth'] = `Basic ${basicAuth}`;
     }
     
-    logger.info('En-têtes d'authentification générés avec succès');
-    logger.debug('Structure des en-têtes', { headerNames: Object.keys(headers) });
+    logger.info("En-têtes d'authentification générés avec succès");
+    logger.debug("Structure des en-têtes", { headerNames: Object.keys(headers) });
     
     return headers;
   } catch (error) {
-    logger.error('Erreur lors de la génération des en-têtes d'authentification', null, error);
+    logger.error("Erreur lors de la génération des en-têtes d'authentification", null, error);
     throw new Error(`Impossible de générer les en-têtes: ${error.message}`);
   }
 }
@@ -56,14 +56,14 @@ export async function isAuthConfigured() {
     const apiKey = await getApiKey();
     const isConfigured = !!apiKey && apiKey.length > 0;
     
-    logger.debug('Vérification de la configuration d'authentification', { 
+    logger.debug("Vérification de la configuration d'authentification", { 
       isConfigured,
       keyDefined: !!apiKey
     });
     
     return isConfigured;
   } catch (error) {
-    logger.error('Erreur lors de la vérification de la configuration d'authentification', null, error);
+    logger.error("Erreur lors de la vérification de la configuration d'authentification", null, error);
     return false;
   }
 }
@@ -76,16 +76,16 @@ export async function isAuthConfigured() {
 export async function extractApiKeyFromHeaders(headers) {
   try {
     if (!headers) {
-      logger.warn('Tentative d'extraction de clé API à partir d'en-têtes non définis');
+      logger.warn("Tentative d'extraction de clé API à partir d'en-têtes non définis");
       return null;
     }
     
-    logger.debug('Extraction de la clé API depuis les en-têtes');
+    logger.debug("Extraction de la clé API depuis les en-têtes");
     
     // Essayer d'extraire depuis l'en-tête Authorization
     let apiKey = null;
     
-    if (headers.Authorization && headers.Authorization.startsWith('Bearer ')) {
+    if (headers.Authorization && headers.Authorization.startsWith("Bearer ")) {
       apiKey = headers.Authorization.substring(7); // Enlève 'Bearer '
     } 
     // Essayer d'extraire depuis l'en-tête API-Key
@@ -94,15 +94,15 @@ export async function extractApiKeyFromHeaders(headers) {
     }
     
     if (apiKey) {
-      logger.info('Clé API extraite avec succès des en-têtes');
-      logger.debug('Détails de la clé extraite', { keyLength: apiKey.length });
+      logger.info("Clé API extraite avec succès des en-têtes");
+      logger.debug("Détails de la clé extraite", { keyLength: apiKey.length });
     } else {
-      logger.warn('Aucune clé API trouvée dans les en-têtes');
+      logger.warn("Aucune clé API trouvée dans les en-têtes");
     }
     
     return apiKey;
   } catch (error) {
-    logger.error('Erreur lors de l'extraction de la clé API depuis les en-têtes', null, error);
+    logger.error("Erreur lors de l'extraction de la clé API depuis les en-têtes", null, error);
     return null;
   }
 }
