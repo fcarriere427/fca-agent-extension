@@ -20,7 +20,7 @@ async function verifySystemIntegrity() {
   // 1. Vérification de la configuration de la clé API
   try {
     // Vérifier que les headers d'authentification sont générés correctement
-    const headers = getAuthHeaders();
+    const headers = await getAuthHeaders();
     if (!headers || !headers.Authorization) {
       logger.error('ALERTE: Problème avec la génération des headers d\'authentification');
       isSystemConsistent = false;

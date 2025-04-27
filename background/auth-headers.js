@@ -33,7 +33,7 @@ export async function getAuthHeaders(options = {}) {
     
     // Ajouter l'authentification Basic si demandée
     if (options.includeBasic) {
-      const basicAuth = btoa("api:' + apiKey");
+      const basicAuth = btoa(`api:${apiKey}`);
       headers['X-Basic-Auth'] = `Basic ${basicAuth}`;
     }
     
