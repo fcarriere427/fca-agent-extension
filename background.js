@@ -3,8 +3,8 @@
 import { loadInitialConfig, setDefaultConfig, getApiUrl } from './background/config.js';
 import { getAuthHeaders } from './background/auth-headers.js';
 import { isAuthConfigured } from './background/auth-headers.js';
-import { setupMessageHandlers } from './background/handlers-consolidated.js';
-import { checkServerOnline, getServerStatus, forceServerCheck } from './background/server-consolidated.js';
+import { setupMessageHandlers } from './background/handlers.js';
+import { checkServerOnline, getServerStatus, forceServerCheck } from './background/server.js';
 import { createModuleLogger } from './utils/logger.js';
 
 // Création d'une instance de logger spécifique pour ce module

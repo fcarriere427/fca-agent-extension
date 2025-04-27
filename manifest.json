@@ -24,7 +24,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["logger.js", "background/config.js", "background/auth-headers.js", "background/handlers-consolidated.js", "background/server-consolidated.js"],
+      "resources": ["logger.js", "background/config.js", "background/auth-headers.js", "background/handlers.js", "background/server.js"],
       "matches": ["<all_urls>"]
     }
   ],

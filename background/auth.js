@@ -16,6 +16,12 @@ import {
   generateDebugToken 
 } from './auth-api.js';
 
+/**
+ * Module d'authentification principal
+ * Gère l'authentification des utilisateurs et la persistance des sessions
+ * @module auth
+ */
+
 // Création d'une instance de logger spécifique pour ce module
 const logger = createModuleLogger('auth.js');
 
@@ -91,9 +97,18 @@ setInterval(async () => {
 }, SYNC_INTERVAL);
 
 // Méthodes d'accès
+/**
+ * Retourne l'état d'authentification actuel
+ * @returns {Object} État d'authentification {isAuthenticated, hasToken}
+ */
 export function getAuthStatus() {
-  logger.log(`getAuthStatus() => isAuthenticated=${isAuthenticated}, hasToken=${!!authToken}`);
-  return { isAuthenticated, hasToken: !!authToken };
+  try {
+    logger.debug(`getAuthStatus() => isAuthenticated=${isAuthenticated}, hasToken=${!!authToken}`);
+    return { isAuthenticated, hasToken: !!authToken };
+  } catch (error) {
+    logger.error(`Erreur lors de la récupération de l'état d'authentification`, null, error);
+    return { isAuthenticated: false, hasToken: false };
+  }
 }
 
 /**
@@ -134,56 +149,78 @@ export function setAuthenticated(status, token = null) {
 /**
  * Diffuse le statut d'authentification aux autres composants
  */
-function broadcastAuthStatus() {
-  const status = { 
-    isAuthenticated, 
-    hasToken: !!authToken,
-    tokenPreview: authToken ? `${authToken.substring(0, 4)}...${authToken.substring(authToken.length-4)}` : null 
-  };
-  logger.log(`Diffusion du statut d'authentification: ${JSON.stringify(status)}`);
-  
+/**
+ * Diffuse le statut d'authentification aux autres composants de l'extension
+ * Utilise à la fois chrome.runtime.sendMessage et chrome.storage pour la persistance
+ */
+async function broadcastAuthStatus() {
   try {
+    const status = { 
+      isAuthenticated, 
+      hasToken: !!authToken,
+      tokenPreview: authToken ? `${authToken.substring(0, 4)}...${authToken.substring(authToken.length-4)}` : null 
+    };
+    logger.info(`Diffusion du statut d'authentification`, {
+      isAuthenticated: status.isAuthenticated,
+      hasToken: status.hasToken
+    });
+    
     // Essayer d'abord avec chrome.runtime.sendMessage
     const sendMessage = () => {
-      chrome.runtime.sendMessage({ 
-        action: 'authStatusChanged', 
-        status: status 
-      }, response => {
-        if (chrome.runtime.lastError) {
-          // Message d'erreur plus détaillé pour le débogage
-          logger.warn(`Message authStatusChanged non délivré: ${chrome.runtime.lastError.message}`);
-          
-          // Journaliser l'erreur mais ne pas traiter comme critique
-          // (normal au démarrage quand popup n'est pas encore ouvert)
-          if (chrome.runtime.lastError.message.includes('Receiving end does not exist')) {
-            logger.log('Aucun récepteur disponible pour le message (normal si popup fermé)');
+      return new Promise(resolve => {
+        chrome.runtime.sendMessage({ 
+          action: 'authStatusChanged', 
+          status: status 
+        }, response => {
+          if (chrome.runtime.lastError) {
+            // Message d'erreur plus détaillé pour le débogage
+            logger.warn(`Message authStatusChanged non délivré: ${chrome.runtime.lastError.message}`);
+            
+            // Journaliser l'erreur mais ne pas traiter comme critique
+            // (normal au démarrage quand popup n'est pas encore ouvert)
+            if (chrome.runtime.lastError.message.includes('Receiving end does not exist')) {
+              logger.debug('Aucun récepteur disponible pour le message (normal si popup fermé)');
+            }
+            resolve(false);
+          } else {
+            logger.debug('Message authStatusChanged délivré avec succès');
+            resolve(true);
           }
-        } else {
-          logger.log('Message authStatusChanged délivré avec succès');
-        }
+        });
       });
     };
     
     // Appel immédiat suivi d'un second appel décalé pour augmenter les chances de réception
-    sendMessage();
-    setTimeout(sendMessage, 500); // Second envoi après 500ms
+    await sendMessage();
+    setTimeout(async () => {
+      await sendMessage();
+    }, 500); // Second envoi après 500ms
     
     // Enregistrer l'état dans le stockage local pour permettre la récupération par d'autres composants
-    chrome.storage.local.set({ 'authStatus': status }, () => {
-      if (chrome.runtime.lastError) {
-        logger.warn(`Impossible de sauvegarder l'état d'authentification: ${chrome.runtime.lastError.message}`);
-      } else {
-        logger.log('Statut d\'authentification sauvegardé dans le storage local');
-      }
+    await new Promise(resolve => {
+      chrome.storage.local.set({ 'authStatus': status }, () => {
+        if (chrome.runtime.lastError) {
+          logger.warn(`Impossible de sauvegarder l'état d'authentification: ${chrome.runtime.lastError.message}`);
+          resolve(false);
+        } else {
+          logger.debug('Statut d\'authentification sauvegardé dans le storage local');
+          resolve(true);
+        }
+      });
     });
   } catch (error) {
-    logger.error(`Erreur lors de la diffusion du statut: ${error.message}`);
+    logger.error(`Erreur lors de la diffusion du statut`, null, error);
     
     // Tentative de sauvegarde dans le stockage comme fallback
     try {
-      chrome.storage.local.set({ 'authStatus': status });
+      await new Promise(resolve => {
+        chrome.storage.local.set({ 'authStatus': {
+          isAuthenticated,
+          hasToken: !!authToken
+        }}, resolve);
+      });
     } catch (storageError) {
-      logger.error(`Échec complet de la communication: ${storageError.message}`);
+      logger.error(`Échec complet de la communication`, null, storageError);
     }
   }
 }
@@ -192,13 +229,19 @@ function broadcastAuthStatus() {
  * Charge l'état d'authentification depuis le stockage local
  * @returns {Promise<Object>} - État d'authentification
  */
-export function loadAuthState() {
-  logger.log('Chargement du statut d\'authentification depuis le stockage local...');
-  
-  return new Promise(async (resolve) => {
+/**
+ * Charge l'état d'authentification depuis le stockage local
+ * Vérifie également la validité du token auprès du serveur
+ * @returns {Promise<Object>} État d'authentification {isAuthenticated, hasToken, tokenPreview}
+ */
+export async function loadAuthState() {
+  try {
+    logger.info('Chargement du statut d\'authentification depuis le stockage local');
+    
     const token = await loadTokenFromStorage();
     
     if (token) {
+      logger.debug('Token trouvé dans le stockage local', { tokenLength: token.length });
       authToken = token;
       isAuthenticated = true;
       
@@ -210,28 +253,34 @@ export function loadAuthState() {
               logger.error('ALERTE: Le token chargé semble invalide selon le serveur!');
               // On ne reset pas l'authentification ici pour éviter les déconnexions en cas de problème réseau
             } else {
-              logger.log('Token chargé validé par le serveur');
+              logger.info('Token chargé validé par le serveur');
             }
           })
           .catch(error => {
-            logger.error(`Erreur lors de la validation du token: ${error}`);
+            logger.error(`Erreur lors de la validation du token`, null, error);
           });
       }, 500); // Attendre que les services soient prêts
     } else {
       isAuthenticated = false;
       authToken = null;
-      logger.log('Aucune session authentifiée trouvée dans le stockage local');
+      logger.info('Aucune session authentifiée trouvée dans le stockage local');
     }
     
     // Annoncer le statut d'authentification au démarrage
-    broadcastAuthStatus();
+    await broadcastAuthStatus();
     
-    resolve({ 
+    const authStatus = { 
       isAuthenticated, 
       hasToken: !!authToken,
       tokenPreview: authToken ? `${authToken.substring(0, 4)}...${authToken.substring(authToken.length-4)}` : null 
-    });
-  });
+    };
+    
+    logger.debug('État d\'authentification chargé', authStatus);
+    return authStatus;
+  } catch (error) {
+    logger.error(`Erreur lors du chargement de l'état d'authentification`, null, error);
+    return { isAuthenticated: false, hasToken: false, tokenPreview: null };
+  }
 }
 
 /**
@@ -356,10 +405,12 @@ export async function logoutFromServer() {
 
 /**
  * Vérifie l'état d'authentification auprès du serveur
- * @returns {Promise<boolean|Object>} - Résultat de la vérification
+ * @returns {Promise<boolean|Object>} Résultat de la vérification (true/false/objet d'état)
  */
 export async function checkAuthWithServer() {
   try {
+    logger.info('Vérification de l\'authentification auprès du serveur');
+    
     // Délai court pour permettre aux autres opérations asynchrones de se terminer
     await new Promise(resolve => setTimeout(resolve, 50));
     
@@ -369,7 +420,7 @@ export async function checkAuthWithServer() {
     // Journalisation détaillée pour le débogage
     if (headers.Authorization) {
       const tokenPreview = headers.Authorization.substring(7, 15) + '...'; // 'Bearer XXXX...'
-      logger.log(`Utilisation du token ${tokenPreview} pour vérification avec le serveur`);
+      logger.debug(`Utilisation du token pour vérification avec le serveur`, { tokenPreview });
     }
     
     // Vérifier la disponibilité du token avant de poursuivre
@@ -379,7 +430,7 @@ export async function checkAuthWithServer() {
       
       // Essayer de récupérer depuis le stockage de secours
       try {
-        logger.log('Tentative de récupération d\'urgence du token...');
+        logger.debug('Tentative de récupération d\'urgence du token...');
         const backupToken = await getSessionToken();
         if (backupToken) {
           logger.warn('Récupération du token depuis le stockage de secours');
@@ -400,13 +451,13 @@ export async function checkAuthWithServer() {
           } else {
             // Pas de sauvegarde disponible non plus
             logger.error('Aucun token disponible dans aucun stockage, déconnexion forcée');
-            resetAuthentication();
+            await resetAuthentication();
             return false;
           }
         }
       } catch (error) {
-        logger.error(`Erreur lors de la récupération du token de secours: ${error.message}`);
-        resetAuthentication();
+        logger.error(`Erreur lors de la récupération du token de secours`, null, error);
+        await resetAuthentication();
         return false;
       }
     }
@@ -421,57 +472,64 @@ export async function checkAuthWithServer() {
     try {
       // Journaliser les détails de la requête pour le débogage
       const authHeaderPreview = headers.Authorization.substring(0, 15) + '...';
-      logger.log(`Vérification avec le serveur: headers = ${authHeaderPreview}`);
+      logger.debug(`Envoi de la requête de vérification au serveur`, { headers: authHeaderPreview });
       
       const result = await checkAuthRequest(headers);
       
       // Journaliser le résultat
-      logger.log(`Résultat de la vérification: ${JSON.stringify(result)}`);
+      logger.debug(`Résultat de la vérification reçu`, { result });
       
       // Traitement du résultat
       if (result === true || result === false) {
         // Si le serveur nous dit que le statut a changé
         if (result !== isAuthenticated) {
-          logger.log(`Mise à jour du statut local: ${isAuthenticated} -> ${result}`);
+          logger.info(`Mise à jour du statut local d'authentification`, {
+            ancien: isAuthenticated,
+            nouveau: result
+          });
+          
           if (result) {
             // Si le serveur nous dit qu'on est authentifié mais qu'on ne l'était pas avant
             isAuthenticated = true;
             if (!authToken) {
               authToken = `server_validated_${Date.now()}`;
               await saveTokenToStorage(authToken); // Attendez la fin de la sauvegarde
+              logger.debug('Création d\'un nouveau token validé par le serveur');
             }
           } else {
             // Si le serveur nous dit qu'on n'est pas authentifié, on efface le token
-            resetAuthentication();
+            await resetAuthentication();
           }
-          broadcastAuthStatus();
+          await broadcastAuthStatus();
+        } else {
+          logger.debug('Statut d\'authentification confirmé par le serveur');
         }
         return result;
       } else if (result && result.unauthorized) {
         // Token invalide ou expiré
         logger.warn('Token invalide ou expiré, déconnexion forcée');
-        resetAuthentication();
+        await resetAuthentication();
         return false;
       } else if (result && result.noChange) {
         // Aucun changement, on conserve l'état actuel
-        logger.log('Statut d\'authentification inchangé selon le serveur');
+        logger.debug('Statut d\'authentification inchangé selon le serveur');
         return isAuthenticated;
       } else if (result && result.error) {
         // Erreur de connexion, conserver l'état local
-        logger.error(`Erreur lors de la vérification: ${result.message}`);
+        logger.error(`Erreur lors de la vérification avec le serveur`, { message: result.message });
         return isAuthenticated;
       }
       
       // Par défaut, on garde l'état actuel
+      logger.debug('Réponse du serveur non reconnue, conservation de l\'état actuel');
       return isAuthenticated;
     } catch (requestError) {
-      logger.error(`Erreur lors de la requête de vérification: ${requestError.message}`);
+      logger.error(`Erreur lors de la requête de vérification`, null, requestError);
       // En cas d'erreur réseau, on maintient l'état actuel
       return isAuthenticated;
     }
   } catch (globalError) {
-    logger.error(`Exception globale lors de la vérification d'authentification: ${globalError.message}`);
-    logger.error(`Stack: ${globalError.stack}`);
+    logger.error(`Exception globale lors de la vérification d'authentification`, null, globalError);
     // En cas d'erreur grave, on garde l'état d'authentification actuel
     return isAuthenticated;
   }
@@ -481,88 +539,105 @@ export async function checkAuthWithServer() {
  * Fournit les en-têtes d'authentification pour les requêtes API
  * @returns {Object} - En-têtes avec le token d'authentification
  */
+/**
+ * Fournit les en-têtes d'authentification pour les requêtes API
+ * Tente de récupérer un token valide si nécessaire
+ * @returns {Promise<Object>} En-têtes avec le token d'authentification
+ */
 export async function getAuthHeaders() {
-  if (!authToken) {
-    logger.warn('WARNING: getAuthHeaders appelé sans token disponible!');
-    
-    // Récupérer des informations de diagnostic
-    const diagnosticInfo = {
-      isAuthenticated,
-      hasAuthToken: !!authToken,
-      storage: {}
-    };
-    
-    // Vérifier tous les stockages simultanément pour diagnostic
-    try {
-      const sessionStorage = await new Promise(resolve => {
-        chrome.storage.session.get(['authTokenBackup'], result => {
-          diagnosticInfo.storage.session = !!result?.authTokenBackup;
-          resolve(result?.authTokenBackup);
-        });
-      });
-      
-      const localStorage = await new Promise(resolve => {
-        chrome.storage.local.get(['authToken'], result => {
-          diagnosticInfo.storage.local = !!result?.authToken;
-          resolve(result?.authToken);
-        });
-      });
-      
-      logger.warn(`Diagnostic de token - Authétifié: ${diagnosticInfo.isAuthenticated}, 
-                  Token en mémoire: ${diagnosticInfo.hasAuthToken}, 
-                  Token en session: ${diagnosticInfo.storage.session}, 
-                  Token en local: ${diagnosticInfo.storage.local}`);
-      
-      // Tentative de récupération depuis le stockage de session
-      if (sessionStorage) {
-        logger.warn(`Récupération d'urgence du token depuis la sauvegarde de session`);
-        authToken = sessionStorage;
-        isAuthenticated = true;
-        // Synchronisation avec le stockage local
-        saveTokenToStorage(authToken);
-        return { 'Authorization': `Bearer ${authToken}` };
-      }
-      
-      // Tentative de récupération depuis le stockage local
-      if (localStorage) {
-        logger.warn(`Récupération d'urgence du token depuis le stockage local`);
-        authToken = localStorage;
-        isAuthenticated = true;
-        // Synchronisation avec le stockage de session
-        chrome.storage.session.set({'authTokenBackup': localStorage});
-        return { 'Authorization': `Bearer ${authToken}` };
-      }
-    } catch (error) {
-      logger.error(`Erreur lors de la récupération des tokens: ${error.message}`);
-    }
-    
-    // Si toujours pas de token, générer un nouveau token de secours
+  try {
     if (!authToken) {
-      logger.error('ERREUR CRITIQUE: Aucun token disponible, création d\'un token de secours');
-      const emergencyToken = `emergency_token_${Date.now()}`;
-      authToken = emergencyToken;
-      isAuthenticated = true;
+      logger.warn('getAuthHeaders appelé sans token disponible');
       
-      // Sauvegarder dans les différents stockages
+      // Récupérer des informations de diagnostic
+      const diagnosticInfo = {
+        isAuthenticated,
+        hasAuthToken: !!authToken,
+        storage: {}
+      };
+      
+      // Vérifier tous les stockages simultanément pour diagnostic
       try {
-        chrome.storage.session.set({'authTokenBackup': emergencyToken});
-        saveTokenToStorage(emergencyToken);
-        logger.warn('Token de secours généré et enregistré');
-        // Notification
-        broadcastAuthStatus();
-        return { 'Authorization': `Bearer ${emergencyToken}` };
-      } catch (saveError) {
-        logger.error(`Erreur lors de la sauvegarde du token de secours: ${saveError.message}`);
+        const sessionStorage = await new Promise(resolve => {
+          chrome.storage.session.get(['authTokenBackup'], result => {
+            diagnosticInfo.storage.session = !!result?.authTokenBackup;
+            resolve(result?.authTokenBackup);
+          });
+        });
+        
+        const localStorage = await new Promise(resolve => {
+          chrome.storage.local.get(['authToken'], result => {
+            diagnosticInfo.storage.local = !!result?.authToken;
+            resolve(result?.authToken);
+          });
+        });
+        
+        logger.debug('Diagnostic de token', diagnosticInfo);
+        
+        // Tentative de récupération depuis le stockage de session
+        if (sessionStorage) {
+          logger.warn(`Récupération d'urgence du token depuis la sauvegarde de session`);
+          authToken = sessionStorage;
+          isAuthenticated = true;
+          // Synchronisation avec le stockage local
+          await saveTokenToStorage(authToken);
+          return { 'Authorization': `Bearer ${authToken}` };
+        }
+        
+        // Tentative de récupération depuis le stockage local
+        if (localStorage) {
+          logger.warn(`Récupération d'urgence du token depuis le stockage local`);
+          authToken = localStorage;
+          isAuthenticated = true;
+          // Synchronisation avec le stockage de session
+          await new Promise(resolve => {
+            chrome.storage.session.set({'authTokenBackup': localStorage}, resolve);
+          });
+          return { 'Authorization': `Bearer ${authToken}` };
+        }
+      } catch (error) {
+        logger.error(`Erreur lors de la récupération des tokens`, null, error);
       }
+      
+      // Si toujours pas de token, générer un nouveau token de secours
+      if (!authToken) {
+        logger.error('ERREUR CRITIQUE: Aucun token disponible, création d\'un token de secours');
+        const emergencyToken = `emergency_token_${Date.now()}`;
+        authToken = emergencyToken;
+        isAuthenticated = true;
+        
+        // Sauvegarder dans les différents stockages
+        try {
+          await Promise.all([
+            new Promise(resolve => {
+              chrome.storage.session.set({'authTokenBackup': emergencyToken}, resolve);
+            }),
+            saveTokenToStorage(emergencyToken)
+          ]);
+          
+          logger.warn('Token de secours généré et enregistré');
+          // Notification
+          await broadcastAuthStatus();
+          return { 'Authorization': `Bearer ${emergencyToken}` };
+        } catch (saveError) {
+          logger.error(`Erreur lors de la sauvegarde du token de secours`, null, saveError);
+        }
+      }
+      
+      // Si tout a échoué, renvoyer un en-tête vide mais continuer à essayer de récupérer
+      setTimeout(() => { loadAuthState(); }, 100);
+      return {};
     }
     
-    // Si tout a échoué, renvoyer un en-tête vide mais continuer à essayer de récupérer
-    setTimeout(() => { loadAuthState(); }, 100);
+    logger.debug(`Génération des headers d'authentification`, {
+      tokenLength: authToken.length,
+      tokenPreview: `${authToken.substring(0, 4)}...${authToken.substring(authToken.length-4)}`
+    });
+    return { 'Authorization': `Bearer ${authToken}` };
+  } catch (error) {
+    logger.error(`Exception lors de la génération des headers d'authentification`, null, error);
     return {};
   }
-  
-  logger.log(`Génération des headers d'authentification avec token: ${authToken.substring(0, 4)}...${authToken.substring(authToken.length-4)}`);
-  return { 'Authorization': `Bearer ${authToken}` };
 }
 
 /**
@@ -571,66 +646,103 @@ export async function getAuthHeaders() {
  * avec le token actuellement en mémoire, ou un objet vide s'il n'y a pas de token
  * @returns {Object} - En-têtes avec le token d'authentification
  */
+/**
+ * Version synchrone de getAuthHeaders pour les cas où on ne peut pas attendre
+ * Cette fonction NE FAIT PAS de récupération d'urgence mais renvoie simplement les headers
+ * avec le token actuellement en mémoire, ou un objet vide s'il n'y a pas de token
+ * @returns {Object} En-têtes avec le token d'authentification
+ */
 export function getAuthHeadersSync() {
-  if (!authToken) {
-    logger.warn('WARNING: getAuthHeadersSync appelé sans token disponible!');
+  try {
+    if (!authToken) {
+      logger.warn('getAuthHeadersSync appelé sans token disponible');
+      return {};
+    }
+    
+    logger.debug(`Génération synchrone des headers d'authentification`, { 
+      tokenLength: authToken.length,
+      tokenPreview: `${authToken.substring(0, 4)}...${authToken.substring(authToken.length-4)}`
+    });
+    return { 'Authorization': `Bearer ${authToken}` };
+  } catch (error) {
+    logger.error(`Exception lors de la génération synchrone des headers`, null, error);
     return {};
   }
-  
-  logger.log(`Génération synchrone des headers d'authentification avec token: ${authToken.substring(0, 4)}...${authToken.substring(authToken.length-4)}`);
-  return { 'Authorization': `Bearer ${authToken}` };
 }
 
 /**
  * Tente de récupérer un token valide en cas d'incohérence
  * @returns {Promise<boolean>} - Succès de la récupération
  */
+/**
+ * Tente de récupérer un token valide en cas d'incohérence entre les différents stockages
+ * Vérifie dans l'ordre : stockage de session, stockage local
+ * @returns {Promise<boolean>} Succès de la récupération
+ */
 export async function handleTokenInconsistency() {
-  logger.log('Début de la récupération de token');
-  
-  // Essayer de récupérer depuis le stockage de session (chrome.storage.session)
   try {
-    const sessionToken = await getSessionToken();
-    if (sessionToken) {
-      logger.warn('Récupération du token depuis le stockage de session');
-      return setToken(sessionToken);
+    logger.info('Début de la récupération de token suite à une incohérence');
+    
+    // Essayer de récupérer depuis le stockage de session (chrome.storage.session)
+    try {
+      const sessionToken = await getSessionToken();
+      if (sessionToken) {
+        logger.warn('Récupération du token depuis le stockage de session');
+        return await setToken(sessionToken);
+      }
+    } catch (sessionError) {
+      logger.error(`Erreur lors de la récupération du token de session`, null, sessionError);
     }
-  } catch (sessionError) {
-    logger.error(`Erreur lors de la récupération du token de session: ${sessionError.message}`);
-  }
-  
-  // Essayer de récupérer depuis le stockage local
-  try {
-    const storedToken = await loadTokenFromStorage();
-    if (storedToken) {
-      logger.warn('Récupération du token stocké localement');
-      return setToken(storedToken);
+    
+    // Essayer de récupérer depuis le stockage local
+    try {
+      const storedToken = await loadTokenFromStorage();
+      if (storedToken) {
+        logger.warn('Récupération du token stocké localement');
+        return await setToken(storedToken);
+      }
+    } catch (storageError) {
+      logger.error(`Erreur lors de la récupération du token local`, null, storageError);
     }
-  } catch (storageError) {
-    logger.error(`Erreur lors de la récupération du token local: ${storageError.message}`);
+    
+    // Aucun token disponible
+    logger.error('Aucun token disponible, déconnexion forcée');
+    return await resetAuthentication();
+  } catch (error) {
+    logger.error(`Exception globale lors de la tentative de récupération de token`, null, error);
+    return await resetAuthentication();
   }
-  
-  // Aucun token disponible
-  logger.error('Aucun token disponible, déconnexion forcée');
-  return resetAuthentication();
 }
 
 /**
  * Réinitialise complètement l'authentification
  * @returns {boolean} - Succès de l'opération
  */
-export function resetAuthentication() {
-  logger.log('Réinitialisation forcée de l\'authentification');
-  isAuthenticated = false;
-  authToken = null;
-  
-  // Nettoyer les stockages
-  clearTokenFromStorage();
-  
-  // Notifier les composants
-  broadcastAuthStatus();
+/**
+ * Réinitialise complètement l'authentification
+ * Efface le token de tous les stockages et notifie les composants
+ * @returns {Promise<boolean>} Succès de l'opération (toujours false pour indiquer non-authentifié)
+ */
+export async function resetAuthentication() {
+  try {
+    logger.info('Réinitialisation forcée de l\'authentification');
+    isAuthenticated = false;
+    authToken = null;
+    
+    // Nettoyer les stockages
+    await clearTokenFromStorage();
+    
+    // Notifier les composants
+    await broadcastAuthStatus();
 
-  return false;
+    return false;
+  } catch (error) {
+    logger.error(`Erreur lors de la réinitialisation de l'authentification`, null, error);
+    // Même en cas d'erreur, on force l'état déconnecté
+    isAuthenticated = false;
+    authToken = null;
+    return false;
+  }
 }
 
 /**
@@ -638,19 +750,33 @@ export function resetAuthentication() {
  * @param {string} token - Token à définir
  * @returns {boolean} - Succès de l'opération
  */
-export function setToken(token) {
-  if (!token) {
-    logger.error('Tentative de définition d\'un token nul ou vide!');
+/**
+ * Définit directement un token (utilisée pour les récupérations d'urgence)
+ * @param {string} token - Token à définir
+ * @returns {Promise<boolean>} Succès de l'opération 
+ */
+export async function setToken(token) {
+  try {
+    if (!token) {
+      logger.error('Tentative de définition d\'un token nul ou vide!');
+      return false;
+    }
+    
+    logger.info(`Définition directe du token`, {
+      tokenLength: token.length,
+      tokenPreview: `${token.substring(0, 4)}...${token.substring(token.length-4)}`
+    });
+    
+    authToken = token;
+    isAuthenticated = true;
+    
+    // Sauvegarder dans les différents stockages
+    await saveTokenToStorage(token);
+    await broadcastAuthStatus();
+    
+    return true;
+  } catch (error) {
+    logger.error(`Erreur lors de la définition directe du token`, null, error);
     return false;
   }
-  
-  logger.log(`Définition directe du token: ${token.substring(0, 4)}...${token.substring(token.length-4)}`);
-  authToken = token;
-  isAuthenticated = true;
-  
-  // Sauvegarder dans les différents stockages
-  saveTokenToStorage(token);
-  broadcastAuthStatus();
-  
-  return true;
 }
