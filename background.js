@@ -1,59 +1,51 @@
-// FCA-Agent - Background Service Worker (version simplifiée avec clé API fixe)
+// FCA-Agent - Background Service Worker (version simplifiée)
 
 import { loadInitialConfig, setDefaultConfig, getApiUrl } from './background/config.js';
-import { getAuthHeaders } from './background/auth-headers.js';
+import { getAuthHeaders } from './background/auth-headers-simple.js';
 import { setupMessageHandlers } from './background/handlers.js';
 import { checkServerOnline, getServerStatus, forceServerCheck } from './background/server.js';
 import { createModuleLogger } from './utils/logger.js';
 
 // Création d'une instance de logger spécifique pour ce module
-const logger = createModuleLogger('background.js');
+const logger = createModuleLogger('background-simple');
 
 /**
- * Vérifie l'intégrité du système après initialisation
+ * Fonction simplifiée de vérification système
  * @returns {Promise<boolean>} - Résultat de la vérification
  */
 async function verifySystemIntegrity() {
-  logger.log('Démarrage de la vérification d\'intégrité du système...');
+  logger.log('Vérification simplifiée du système...');
   let isSystemConsistent = true;
   
-  // 1. Vérification de la configuration de la clé API
+  // 1. Vérification des headers d'authentification
   try {
-    // Vérifier que les headers d'authentification sont générés correctement
     const headers = await getAuthHeaders();
     if (!headers || !headers.Authorization) {
-      logger.error('ALERTE: Problème avec la génération des headers d\'authentification');
+      logger.error('Problème avec la génération des headers d\'authentification');
       isSystemConsistent = false;
     } else {
-      logger.log('Clé API configurée correctement');
+      logger.log('Headers d\'authentification OK');
     }
-  } catch (authCheckError) {
-    logger.error(`Erreur lors de la vérification d'authentification: ${authCheckError.message}`);
+  } catch (authError) {
+    logger.error(`Erreur d'authentification: ${authError.message}`);
     isSystemConsistent = false;
   }
   
-  // 2. Vérification de la configuration
+  // 2. Vérification de l'URL API
   try {
     const apiUrl = getApiUrl();
-    
     if (!apiUrl) {
-      logger.error('ALERTE: URL de l\'API non définie ou invalide!');
+      logger.error('URL de l\'API non définie!');
       isSystemConsistent = false;
     } else {
-      logger.log(`URL API configurée: ${apiUrl}`);
+      logger.log(`URL API: ${apiUrl}`);
     }
   } catch (configError) {
-    logger.error(`Erreur lors de la vérification de configuration: ${configError.message}`);
+    logger.error(`Erreur de configuration: ${configError.message}`);
     isSystemConsistent = false;
   }
   
-  // 3. Journal du résultat final
-  if (isSystemConsistent) {
-    logger.log('Vérification d\'intégrité du système réussie!');
-  } else {
-    logger.error('Vérification d\'intégrité du système échouée - des problèmes ont été détectés');
-  }
-  
+  logger.log(`Vérification système: ${isSystemConsistent ? 'OK' : 'Échec'}`);
   return isSystemConsistent;
 }
 
@@ -65,151 +57,109 @@ async function initializeConfig() {
 }
 
 async function initializeServer() {
-  logger.log('Vérification de l\'état du serveur...');
+  logger.log('Vérification du serveur...');
   try {
     const serverStatus = await checkServerOnline();
-    logger.log(`État initial du serveur: ${serverStatus ? 'connecté' : 'déconnecté'}`);
-    
-    // Force une diffusion de l'état initial
-    if (serverStatus) {
-      await forceServerCheck();
-    }
-    
+    logger.log(`Serveur: ${serverStatus ? 'connecté' : 'déconnecté'}`);
     return serverStatus;
   } catch (error) {
-    logger.warn(`Erreur lors de la vérification initiale du serveur: ${error.message}`);
+    logger.warn(`Erreur de vérification serveur: ${error.message}`);
     return false;
   }
 }
 
 // Fonction principale d'initialisation simplifiée
 async function initialize() {
-  logger.log('Initialisation du service worker FCA-Agent avec clé API fixe...');
+  logger.log('Initialisation du service worker (version simplifiée)...');
   
   try {
-    // Étape 1: Initialisation de la configuration
-    logger.log('Étape 1: Initialisation de la configuration');
+    // Étape 1: Configuration
     await initializeConfig();
     
-    // Étape 2: Initialisation du serveur
-    logger.log('Étape 2: Initialisation de la connexion au serveur');
+    // Étape 2: Serveur
     const serverStatus = await initializeServer();
     
-    // Récapitulatif
-    logger.log(`Statut après initialisation - Auth: toujours actif (clé API fixe), Server: ${serverStatus}`);
-    
-    // Vérification de l'intégrité du système
+    // Étape 3: Vérification système
     await verifySystemIntegrity();
     
     // Configuration des gestionnaires de messages
     setupMessageHandlers();
     
-    logger.log('Initialisation du service worker terminée');
-    
-    // Vérification rapide du serveur après une courte période
-    setTimeout(async () => {
-      try {
-        // Vérification du serveur
-        const serverOnline = await forceServerCheck();
-        logger.log(`Vérification finale du serveur: ${serverOnline ? 'connecté' : 'déconnecté'}`);
-        logger.log('Initialisation complète et stable confirmée');
-      } catch (error) {
-        logger.error(`Erreur lors de la vérification finale: ${error.message}`);
-      }
-    }, 2000);
+    logger.log('Initialisation terminée');
     
     return { 
-      authStatus: { isAuthenticated: true }, // Toujours authentifié avec clé API fixe
+      authStatus: { isAuthenticated: true }, // Toujours vrai avec clé API fixe
       serverStatus
     };
-  } catch (initError) {
-    logger.error(`Erreur critique lors de l'initialisation: ${initError.message}`);
-    logger.error(`Stack trace: ${initError.stack}`);
+  } catch (error) {
+    logger.error(`Erreur d'initialisation: ${error.message}`);
     return { 
-      authStatus: { isAuthenticated: true }, // Toujours authentifié avec clé API fixe
+      authStatus: { isAuthenticated: true },
       serverStatus: false
     };
   }
 }
 
-// Installation/mise à jour de l'extension
+// Installation/mise à jour
 chrome.runtime.onInstalled.addListener(async (details) => {
-  logger.log(`FCA-Agent installé/mis à jour: ${details.reason}`);
-  
+  logger.log(`Extension installée/mise à jour: ${details.reason}`);
   await setDefaultConfig();
   await initialize();
 });
 
-// Démarrage du service worker
+// Démarrage
 chrome.runtime.onStartup.addListener(() => {
-  logger.log('Service worker démarré via onStartup');
+  logger.log('Service worker démarré');
   initialize();
 });
 
-// Initialisation immédiate (pour les cas où onStartup n'est pas déclenché)
+// Initialisation immédiate
 let initPromise = initialize().catch(error => {
-  logger.error(`Erreur lors de l'initialisation du service worker: ${error.message}`);
-  logger.error(`Stack: ${error.stack}`);
+  logger.error(`Erreur d'initialisation: ${error.message}`);
   return {
-    authStatus: { isAuthenticated: true }, // Toujours authentifié avec clé API fixe
+    authStatus: { isAuthenticated: true },
     serverStatus: false
   };
 });
 
-// Export de la promesse d'initialisation pour permettre à d'autres modules de s'y synchroniser
+// Export de la promesse d'initialisation
 export { initPromise };
 
-// Mise en place d'une vérification périodique du serveur uniquement
+// Vérification périodique du serveur
 setInterval(async () => {
-  logger.log('Vérification périodique du serveur...');
-  
   try {
-    // Vérifier le serveur et forcer la diffusion du statut
     await forceServerCheck();
   } catch (error) {
-    logger.warn(`Erreur lors de la vérification rapide: ${error.message}`);
+    logger.warn(`Erreur de vérification périodique: ${error.message}`);
   }
-}, 30 * 1000); // Vérification toutes les 30 secondes
+}, 30 * 1000); // 30 secondes
 
-// Mécanisme de supervision simplifié
+// Gestionnaire de messages pour vérifications système
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'systemHealthCheck') {
-    logger.log('Réception d\'une demande de vérification de santé système');
+    logger.log('Demande de vérification système reçue');
     
-    const fullSystemCheck = async () => {
+    (async () => {
       try {
-        // Vérification du serveur
         const serverStatus = getServerStatus();
         const serverCheck = await forceServerCheck();
         
-        return {
+        sendResponse({
           success: true,
-          authStatus: { isAuthenticated: true }, // Toujours authentifié avec clé API fixe
+          authStatus: { isAuthenticated: true },
           serverStatus: serverStatus,
           serverValidated: serverCheck,
           timestamp: Date.now()
-        };
+        });
       } catch (error) {
-        logger.error(`Erreur lors de la vérification système complète: ${error.message}`);
-        return {
+        sendResponse({
           success: false,
           error: error.message,
           timestamp: Date.now()
-        };
+        });
       }
-    };
+    })();
     
-    // Exécution de la vérification système
-    fullSystemCheck().then(result => {
-      sendResponse(result);
-    }).catch(error => {
-      sendResponse({
-        success: false,
-        error: error.message,
-        timestamp: Date.now()
-      });
-    });
-    
-    return true; // Indique une réponse asynchrone
+    return true; // Réponse asynchrone
   }
 });

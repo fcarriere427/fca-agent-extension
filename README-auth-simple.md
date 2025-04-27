@@ -7,7 +7,9 @@ Ce document explique la simplification du système d'authentification de l'exten
 ## Changements effectués
 
 ### 1. Fichiers créés
-- `utils/auth-simple.js` : Gestion centralisée de l'authentification par clé API
+- `config/api-key.js` : Fichier isolé contenant uniquement la clé API (exclu de Git)
+- `config/api-key.example.js` : Exemple de configuration de la clé API
+- `utils/auth-simple.js` : Gestion centralisée de l'authentification
 - `utils/api-simple.js` : Client API simplifié utilisant la nouvelle authentification
 - `background/auth-headers-simple.js` : Générateur d'en-têtes simplifié
 - `background-simple.js` : Version simplifiée du background script
@@ -16,7 +18,15 @@ Ce document explique la simplification du système d'authentification de l'exten
 - Réduction du code (de plus de 600 lignes à environ 250 lignes)
 - Élimination du code inutilisé "maintenu par compatibilité"
 - Simplification de l'initialisation et des vérifications
-- Centralisation de la clé API dans un seul fichier
+- Isolation de la clé API dans un fichier séparé exclu de Git
+
+## Configuration initiale
+
+Avant d'utiliser l'extension, vous devez configurer la clé API:
+
+1. Copiez le fichier `config/api-key.example.js` vers `config/api-key.js`
+2. Ouvrez `config/api-key.js` et remplacez la valeur par votre clé API
+3. Assurez-vous que cette clé correspond exactement à celle définie dans le fichier `.env` du serveur
 
 ## Migration
 
@@ -37,9 +47,11 @@ Pour adopter cette version simplifiée, vous pouvez suivre ces étapes :
    background/auth-headers-simple.js → background/auth-headers.js
    ```
 
-3. Mettez à jour les imports dans vos autres fichiers si nécessaire.
+3. Créez le fichier `config/api-key.js` avec votre clé API.
 
-4. Supprimez les fichiers obsolètes :
+4. Mettez à jour les imports dans vos autres fichiers si nécessaire.
+
+5. Supprimez les fichiers obsolètes :
    ```
    background/api-key.js
    background/auth-api.js
@@ -47,19 +59,16 @@ Pour adopter cette version simplifiée, vous pouvez suivre ces étapes :
    background/auth.js
    ```
 
-## Configuration requise
-
-Le nouveau système utilise une clé API codée en dur dans `utils/auth-simple.js`. Cette clé doit correspondre exactement à la variable d'environnement `API_KEY` configurée dans le fichier `.env` du serveur.
-
 ## Sécurité
 
-Pour une meilleure sécurité, un stockage plus sécurisé de la clé API peut être implémenté dans une prochaine étape avec chrome.storage.local. Le stockage actuel en code source est maintenu pour simplifier cette première phase de refactoring.
+La clé API est désormais stockée dans un fichier séparé qui est exclu du dépôt Git via `.gitignore`. Cela garantit que la clé n'est pas exposée dans le code source public. Chaque développeur doit configurer manuellement ce fichier sur sa machine de développement.
 
 ## Comparaison avec l'ancien système
 
 | Aspect | Ancien système | Nouveau système |
 |--------|---------------|----------------|
-| Fichiers dédiés | 7+ | 4 |
+| Fichiers dédiés | 7+ | 5 |
 | Lignes de code | 600+ | ~250 |
 | Fonctionnalités | Nombreuses inutilisées | Uniquement l'essentiel |
 | Maintenance | Complexe | Simple et centralisée |
+| Sécurité de la clé | Codée en dur dans le code | Isolée dans un fichier exclu de Git |

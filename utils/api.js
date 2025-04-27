@@ -1,4 +1,6 @@
-// FCA-Agent - Module API unifié
+// FCA-Agent - Module API unifié et simplifié
+
+import { getAuthHeaders, checkServerAuthentication } from './auth-simple.js';
 
 /**
  * Récupère l'URL de l'API depuis le background script
@@ -27,7 +29,7 @@ export async function checkServerConnection() {
     const apiBaseUrl = await getApiBaseUrl();
     const response = await fetch(`${apiBaseUrl}/status`, { 
       method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }
     });
     return response.ok;
   } catch (error) {
@@ -37,22 +39,15 @@ export async function checkServerConnection() {
 }
 
 /**
- * Vérifie l'état d'authentification actuel (toujours vrai avec clé API fixe)
+ * Vérifie l'état d'authentification actuel avec le serveur
  * @returns {Promise<boolean>} État d'authentification
  */
 export async function checkAuthentication() {
   try {
-    // Vérification du serveur uniquement (pas d'authentification avec clé API fixe)
     const apiBaseUrl = await getApiBaseUrl();
-    const response = await fetch(`${apiBaseUrl}/status`, { 
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' }
-    });
-    
-    // Si le serveur est accessible, l'authentification est toujours valide avec clé API fixe
-    return response.ok;
+    return await checkServerAuthentication(apiBaseUrl);
   } catch (error) {
-    console.error("Erreur lors de la vérification de connexion au serveur:", error);
+    console.error("Erreur lors de la vérification d'authentification:", error);
     return false;
   }
 }
@@ -65,14 +60,11 @@ export async function checkAuthentication() {
 export async function fetchFullResponse(responseId) {
   try {
     const apiBaseUrl = await getApiBaseUrl();
-    
-    // Afficher l'URL complète dans la console pour le débogage
     console.log("URL appelée:", `${apiBaseUrl}/tasks/response/${responseId}`);
     
-    // Utiliser fetch standard pour récupérer la réponse
     const response = await fetch(`${apiBaseUrl}/tasks/response/${responseId}`, {
       method: 'GET',
-      credentials: 'include'
+      headers: getAuthHeaders()
     });
     
     console.log("Statut de la réponse:", response.status);
@@ -81,7 +73,6 @@ export async function fetchFullResponse(responseId) {
       throw new Error(`Erreur HTTP: ${response.status}`);
     }
     
-    // Récupérer le contenu en texte brut
     const textContent = await response.text();
     console.log(`Réponse reçue: ${textContent.length} caractères`);
     
@@ -92,13 +83,12 @@ export async function fetchFullResponse(responseId) {
   }
 }
 
-// La classe ApiClient pour ceux qui préfèrent une approche orientée objet
+// La classe ApiClient simplifiée
 class ApiClient {
   constructor() {
     this.baseUrl = null; // Sera défini via getApiBaseUrl()
   }
   
-  // Utilise la fonction getApiBaseUrl ci-dessus
   async getBaseUrl() {
     if (!this.baseUrl) {
       this.baseUrl = await getApiBaseUrl();
@@ -113,8 +103,7 @@ class ApiClient {
     try {
       const response = await fetch(`${baseUrl}/${endpoint}`, {
         method: 'GET',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include'
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' }
       });
       
       if (!response.ok) {
@@ -135,9 +124,8 @@ class ApiClient {
     try {
       const response = await fetch(`${baseUrl}/${endpoint}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data),
-        credentials: 'include'
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
       });
       
       if (!response.ok) {
@@ -163,20 +151,13 @@ class ApiClient {
   
   // Vérifier l'authentification
   async checkAuthentication() {
-    // Avec clé API fixe, vérifier uniquement la connexion au serveur
     try {
-      await this.get('status');
-      return true; // Si le serveur répond, l'authentification est toujours valide avec clé API fixe
+      const baseUrl = await this.getBaseUrl();
+      return await checkServerAuthentication(baseUrl);
     } catch (error) {
-      console.error("Erreur lors de la vérification de connexion au serveur:", error);
+      console.error("Erreur lors de la vérification d'authentification:", error);
       return false;
     }
-  }
-  
-  // Déconnexion
-  async logout() {
-    // Avec clé API fixe, la déconnexion ne fait rien
-    return true;
   }
 }
 
