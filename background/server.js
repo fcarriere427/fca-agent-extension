@@ -22,12 +22,12 @@ let serverStatus = {
  * Récupère l'état actuel du serveur
  * @returns {Object} État actuel du serveur
  */
-export async function getServerStatus() {
+export function getServerStatus() {
   try {
     logger.debug('Récupération du statut du serveur');
     return { ...serverStatus };
   } catch (error) {
-    logger.error('Erreur lors de la récupération du statut du serveur', null, error);
+    logger.error(`Erreur lors de la récupération du statut du serveur: ${error.message}`);
     return { ...serverStatus };
   }
 }
@@ -90,7 +90,7 @@ export async function setServerStatus(newStatus) {
     await config.storeValue('serverStatus', { ...serverStatus });
     
   } catch (error) {
-    logger.error('Erreur lors de la mise à jour du statut du serveur', null, error);
+    logger.error(`Erreur lors de la mise à jour du statut du serveur: ${error.message}`);
   }
 }
 
@@ -118,7 +118,7 @@ async function broadcastServerStatus() {
       });
     });
   } catch (error) {
-    logger.error('Erreur lors de la diffusion du statut du serveur', null, error);
+    logger.error(`Erreur lors de la diffusion du statut du serveur: ${error.message}`);
   }
 }
 
@@ -154,7 +154,7 @@ export async function checkServerOnline() {
       // Annuler le timeout car la requête a réussi
       clearTimeout(timeoutId);
       
-      logger.debug('Réponse reçue du serveur', { statusCode: response.status });
+      logger.debug(`Réponse reçue du serveur: ${response.status}`);
       
       // Mettre à jour le statut en fonction du code de réponse
       if (response.ok) {
@@ -181,7 +181,7 @@ export async function checkServerOnline() {
         return true; // Le serveur est en ligne même si auth échouée
       } else {
         // Autre code d'erreur: problème avec le serveur
-        logger.warn('Serveur accessible mais code d\'erreur inattendu', { statusCode: response.status });
+        logger.warn(`Serveur accessible mais code d'erreur inattendu: ${response.status}`);
         await setServerStatus({
           isConnected: true,
           authValid: null, // Inconnu
@@ -207,7 +207,7 @@ export async function checkServerOnline() {
           timeout: true
         });
       } else {
-        logger.error('Erreur réseau lors de la vérification du serveur', null, fetchError);
+        logger.error(`Erreur réseau lors de la vérification du serveur: ${fetchError.message}`);
         // Erreur réseau générique
         await setServerStatus({
           isConnected: false,
@@ -220,7 +220,7 @@ export async function checkServerOnline() {
       return false;
     }
   } catch (error) {
-    logger.error('Exception générale lors de la vérification du serveur', null, error);
+    logger.error(`Exception générale lors de la vérification du serveur: ${error.message}`);
     await setServerStatus({
       isConnected: false,
       authValid: null,
@@ -279,7 +279,7 @@ export async function forceServerCheck() {
           });
         });
       } catch (error) {
-        logger.error('Erreur lors de la diffusion du message', null, error);
+        logger.error(`Erreur lors de la diffusion du message: ${error.message}`);
       }
     };
     
@@ -293,7 +293,7 @@ export async function forceServerCheck() {
     
     return isReachable;
   } catch (error) {
-    logger.error('Erreur lors de la vérification forcée du serveur', null, error);
+    logger.error(`Erreur lors de la vérification forcée du serveur: ${error.message}`);
     
     // Sauvegarder l'état déconnecté dans la configuration
     try {
@@ -307,7 +307,7 @@ export async function forceServerCheck() {
       });
     } catch (e) { 
       // Ignorer les erreurs de stockage en cas d'erreur principale
-      logger.debug('Erreur secondaire lors de la sauvegarde de l\'état déconnecté', null, e);
+      logger.debug(`Erreur secondaire lors de la sauvegarde de l'état déconnecté: ${e.message}`);
     }
     
     return false;
@@ -324,10 +324,7 @@ export async function forceServerCheck() {
 export async function executeTaskOnServer(taskType, taskData) {
   try {
     const apiUrl = config.getConfig('apiBaseUrl');
-    logger.info('Exécution d\'une tâche sur le serveur', { 
-      type: taskType,
-      url: `${apiUrl}/tasks`
-    });
+    logger.info(`Exécution d'une tâche sur le serveur: ${taskType}`);
     
     // Vérifier que la clé API est configurée
     const isConfigured = await apiConfig.isAPIConfigured();
@@ -345,15 +342,16 @@ export async function executeTaskOnServer(taskType, taskData) {
     
     const response = await fetch(`${apiUrl}/tasks`, {
       method: 'POST',
-      headers: headers,
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json'
+      },
       body: JSON.stringify({ type: taskType, data: taskData }),
       credentials: 'omit' // Ne pas utiliser de cookies
     });
     
     // Le serveur a répondu, mettre à jour son statut en fonction du code de réponse
-    logger.debug('Réponse reçue pour l\'exécution de la tâche', { 
-      statusCode: response.status 
-    });
+    logger.debug(`Réponse reçue pour l'exécution de la tâche: ${response.status}`);
     
     if (response.ok) {
       // Serveur connecté avec authentification valide
@@ -391,21 +389,19 @@ export async function executeTaskOnServer(taskType, taskData) {
       try {
         const errorData = await response.json();
         errorMessage += ` - ${JSON.stringify(errorData)}`;
-        logger.error('Détails de l\'erreur d\'exécution de tâche', { 
-          error: errorMessage 
-        });
+        logger.error(`Détails de l'erreur d'exécution de tâche: ${errorMessage}`);
       } catch (e) {
         // Ignorer les erreurs de parsing
-        logger.debug('Impossible de parser le corps de l\'erreur', null, e);
+        logger.debug(`Impossible de parser le corps de l'erreur: ${e.message}`);
       }
       throw new Error(errorMessage);
     }
     
     const result = await response.json();
-    logger.info('Tâche exécutée avec succès', { type: taskType });
+    logger.info(`Tâche exécutée avec succès: ${taskType}`);
     return result;
   } catch (error) {
-    logger.error('Erreur lors de l\'exécution de la tâche', { type: taskType }, error);
+    logger.error(`Erreur lors de l'exécution de la tâche ${taskType}: ${error.message}`);
     
     // Si erreur de connexion, marquer le serveur comme déconnecté
     if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
