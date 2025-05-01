@@ -19,7 +19,7 @@ async function verifySystemIntegrity() {
   
   // 1. Vérification des headers d'authentification
   try {
-    const headers = await getAuthHeaders();
+    const headers = await apiConfig.getAuthHeaders();
     if (!headers || !headers.Authorization) {
       logger.error('Problème avec la génération des headers d\'authentification');
       isSystemConsistent = false;
@@ -33,7 +33,7 @@ async function verifySystemIntegrity() {
   
   // 2. Vérification de l'URL API
   try {
-    const apiUrl = getApiUrl();
+    const apiUrl = config.getConfig('apiBaseUrl');
     if (!apiUrl) {
       logger.error('URL de l\'API non définie!');
       isSystemConsistent = false;
@@ -52,7 +52,7 @@ async function verifySystemIntegrity() {
 // Fonctions d'initialisation simplifiées
 async function initializeConfig() {
   logger.log('Initialisation de la configuration...');
-  await loadInitialConfig();
+  await config.loadConfig();
   logger.log('Configuration chargée');
 }
 
@@ -103,7 +103,7 @@ async function initialize() {
 // Installation/mise à jour
 chrome.runtime.onInstalled.addListener(async (details) => {
   logger.log(`Extension installée/mise à jour: ${details.reason}`);
-  await setDefaultConfig();
+  await config.setDefaultConfig();
   await initialize();
 });
 

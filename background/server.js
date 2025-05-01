@@ -1,8 +1,8 @@
 // FCA-Agent - Module de communication avec le serveur
 // Ce module gère toutes les interactions avec le serveur de l'application
 
-import { getApiUrl } from './config.js';
-import { getAuthHeaders, isAuthConfigured } from './auth-headers.js';
+import config from '../config/index.js';
+import apiConfig from '../config/api.js';
 import { createLogger } from '../utils/logger.js';
 
 // Création d'un logger dédié au module serveur
@@ -85,6 +85,10 @@ export async function setServerStatus(newStatus) {
       
       await broadcastServerStatus();
     }
+    
+    // Stocker le status dans la configuration centralisée
+    await config.storeValue('serverStatus', { ...serverStatus });
+    
   } catch (error) {
     logger.error('Erreur lors de la mise à jour du statut du serveur', null, error);
   }
@@ -124,14 +128,11 @@ async function broadcastServerStatus() {
  */
 export async function checkServerOnline() {
   try {
-    const apiUrl = await getApiUrl();
+    const apiUrl = config.getConfig('apiBaseUrl');
     logger.info('Vérification de la connexion au serveur', { url: `${apiUrl}/status` });
     
     // Récupérer les headers d'authentification (avec la clé API fixe)
-    const headers = { 
-      'Content-Type': 'application/json',
-      ...getAuthHeaders()  // Inclure la clé API
-    };
+    const headers = await apiConfig.getAuthHeaders();
     
     logger.debug('Headers pour vérification', { 
       headerCount: Object.keys(headers).length
@@ -286,38 +287,23 @@ export async function forceServerCheck() {
     await broadcastMessage();
     setTimeout(() => broadcastMessage(), 500); // Second envoi après 500ms
     
-    // Sauvegarder le statut complet dans le stockage local comme mécanisme de secours
-    try {
-      await new Promise((resolve, reject) => {
-        chrome.storage.local.set({ 'serverStatus': { ...serverStatus } }, () => {
-          if (chrome.runtime.lastError) {
-            reject(new Error(chrome.runtime.lastError.message));
-          } else {
-            resolve();
-          }
-        });
-      });
-      
-      logger.debug('Statut du serveur sauvegardé dans le stockage local');
-    } catch (storageError) {
-      logger.warn('Impossible de sauvegarder le statut du serveur dans le stockage local', null, storageError);
-    }
+    // Sauvegarder le statut dans la configuration centralisée
+    await config.storeValue('serverStatus', { ...serverStatus });
+    logger.debug('Statut du serveur sauvegardé dans la configuration');
     
     return isReachable;
   } catch (error) {
     logger.error('Erreur lors de la vérification forcée du serveur', null, error);
     
-    // Sauvegarder l'état déconnecté dans le stockage
+    // Sauvegarder l'état déconnecté dans la configuration
     try {
-      await new Promise((resolve) => {
-        chrome.storage.local.set({ 'serverStatus': { 
-          isConnected: false, 
-          authValid: null, 
-          statusCode: null,
-          error: true,
-          lastCheck: Date.now(),
-          timeout: false
-        }}, resolve);
+      await config.storeValue('serverStatus', { 
+        isConnected: false, 
+        authValid: null, 
+        statusCode: null,
+        error: true,
+        lastCheck: Date.now(),
+        timeout: false
       });
     } catch (e) { 
       // Ignorer les erreurs de stockage en cas d'erreur principale
@@ -337,23 +323,21 @@ export async function forceServerCheck() {
  */
 export async function executeTaskOnServer(taskType, taskData) {
   try {
-    const apiUrl = await getApiUrl();
+    const apiUrl = config.getConfig('apiBaseUrl');
     logger.info('Exécution d\'une tâche sur le serveur', { 
       type: taskType,
       url: `${apiUrl}/tasks`
     });
     
     // Vérifier que la clé API est configurée
-    if (!isAuthConfigured()) {
+    const isConfigured = await apiConfig.isAPIConfigured();
+    if (!isConfigured) {
       logger.error('Clé API non configurée pour l\'exécution de la tâche');
       throw new Error('Clé API non configurée pour cette action');
     }
     
     // Utiliser la clé API pour l'authentification
-    const headers = {
-      'Content-Type': 'application/json',
-      ...getAuthHeaders() // Inclure la clé API dans les en-têtes
-    };
+    const headers = await apiConfig.getAuthHeaders();
     
     logger.debug('Headers pour la requête de tâche', { 
       headerCount: Object.keys(headers).length 
