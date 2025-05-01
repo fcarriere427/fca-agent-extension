@@ -1,6 +1,6 @@
 // FCA-Agent - Module de gestion des messages
 
-import { messagingLog } from './messaging-logger.js';
+import { messagingLog } from './logger-module.js';
 
 // Référence à la zone de réponse
 let responseArea;

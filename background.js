@@ -1,7 +1,7 @@
 // FCA-Agent - Background Service Worker (version simplifiée)
 
 import { loadInitialConfig, setDefaultConfig, getApiUrl } from './background/config.js';
-import { getAuthHeaders } from './background/auth-headers-simple.js';
+import { getAuthHeaders } from './background/auth-headers.js';
 import { setupMessageHandlers } from './background/handlers.js';
 import { checkServerOnline, getServerStatus, forceServerCheck } from './background/server.js';
 import { createModuleLogger } from './utils/logger.js';

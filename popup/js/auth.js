@@ -1,6 +1,6 @@
 // FCA-Agent - Module d'authentification
 
-import { authUiLog } from './auth-logger.js';
+import { authUiLog } from './logger-module.js';
 
 /**
  * Vérifie que l'utilisateur est authentifié
@@ -14,15 +14,15 @@ export function checkAuthOnce(callback) {
       // Vérifier d'abord s'il y a eu une erreur de communication
       if (chrome.runtime.lastError) {
         authUiLog(`Erreur de communication: ${chrome.runtime.lastError.message}`, 'error');
-        window.location.href = 'login/login.html';
+        // Page de login supprimée - authentification par clé API fixe uniquement
         return;
       }
       
       authUiLog(`Réponse reçue: ${JSON.stringify(response)}`);
       
       if (!response || !response.authenticated) {
-        authUiLog('Non authentifié, redirection vers login');
-        window.location.href = 'login/login.html';
+        authUiLog('Non authentifié');
+        // Page de login supprimée - authentification par clé API fixe uniquement
         return;
       }
       
@@ -31,7 +31,7 @@ export function checkAuthOnce(callback) {
     });
   } catch (error) {
     authUiLog(`Exception lors de la vérification d'authentification: ${error.message}`, 'error');
-    window.location.href = 'login/login.html';
+    // Page de login supprimée - authentification par clé API fixe uniquement
   }
 }
 
@@ -47,7 +47,7 @@ export function handleLogout() {
       if (chrome.runtime.lastError) {
         authUiLog(`Erreur lors de la déconnexion: ${chrome.runtime.lastError.message}`, 'error');
         // Rediriger quand même pour éviter les problèmes d'authentification
-        window.location.href = 'login/login.html';
+        // Page de login supprimée - authentification par clé API fixe uniquement
         return;
       }
       
@@ -55,16 +55,14 @@ export function handleLogout() {
       
       if (response && response.success) {
         authUiLog('Déconnexion réussie, redirection vers login');
-        // Rediriger vers la page de connexion
-        window.location.href = 'login/login.html';
+        // Page de login supprimée - authentification par clé API fixe uniquement
       } else {
         authUiLog(`Erreur lors de la déconnexion: ${response ? response.error : 'Aucune réponse'}`, 'error');
-        // Rediriger quand même pour éviter les problèmes d'authentification
-        window.location.href = 'login/login.html';
+        // Page de login supprimée - authentification par clé API fixe uniquement
       }
     });
   } catch (error) {
     authUiLog(`Exception lors de la déconnexion: ${error.message}`, 'error');
-    window.location.href = 'login/login.html';
+    // Page de login supprimée - authentification par clé API fixe uniquement
   }
 }

@@ -1,7 +1,7 @@
 // FCA-Agent - Générateur d'en-têtes d'authentification simplifié
 // Ce module fournit les en-têtes HTTP pour l'authentification avec le serveur
 
-import { API_KEY, getAuthHeaders as getSimpleAuthHeaders } from '../utils/auth-simple.js';
+import { API_KEY, getAuthHeaders as getSimpleAuthHeaders } from '../utils/auth.js';
 import { createLogger } from '../utils/logger.js';
 
 // Création d'une instance de logger spécifique pour ce module

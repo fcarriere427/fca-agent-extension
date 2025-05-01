@@ -3,7 +3,7 @@ import { handleLogout } from './auth.js';
 import { checkServerConnection } from '../../utils/api.js';
 import { displayMessage } from './messaging.js';
 import { processUserInput } from './tasks/generalTasks.js';
-import { uiLog } from './ui-logger.js';
+import { uiLog } from './logger-module.js';
 
 // Référence aux éléments de l'interface
 let quickTaskButtons;

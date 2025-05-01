@@ -1,7 +1,7 @@
 // FCA-Agent - Gestionnaire des tâches pour le popup
 
 import { executeGmailSummaryTask } from './tasks/gmailTasks.js';
-import { taskLog } from './task-handlers-logger.js';
+import { taskHandlersLog as taskLog } from './logger-module.js';
 
 /**
  * Configure les gestionnaires d'événements pour les boutons de tâches

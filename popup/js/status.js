@@ -1,6 +1,6 @@
 // FCA-Agent - Module de gestion des indicateurs de statut
 
-import { statusLog } from './status-logger.js';
+import { statusLog } from './logger-module.js';
 
 // Un seul indicateur de serveur (l'ancien indicateur auth ne sera plus utilisé)
 let serverIndicator;

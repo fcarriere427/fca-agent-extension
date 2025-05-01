@@ -5,7 +5,7 @@ import { initStatusIndicators } from './status.js';
 import { setupMessageHandlers } from '../../background/handlers.js';
 import { setupTaskHandlers } from './task-handlers.js';
 import { initUI } from './ui.js';
-import { mainLog } from './main-logger.js';
+import { mainLog } from './logger-module.js';
 
 document.addEventListener('DOMContentLoaded', () => {
   mainLog('Initialisation du popup UI...');
